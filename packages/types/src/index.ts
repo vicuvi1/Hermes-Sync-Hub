@@ -46,6 +46,77 @@ export interface DeviceTailscaleState {
   peersCount?: number;
 }
 
+export interface SyncthingDevice {
+  id: string;
+  name: string;
+  addresses: string[];
+  connected: boolean;
+  address?: string;
+  clientVersion?: string;
+  inBytesTotal?: number;
+  outBytesTotal?: number;
+  lastSeen?: string;
+  paused: boolean;
+}
+
+export interface SyncthingFolder {
+  id: string;
+  label: string;
+  path: string;
+  type: 'sendreceive' | 'sendonly' | 'receiveonly';
+  state: 'idle' | 'syncing' | 'scanning' | 'error' | 'unknown';
+  globalFiles: number;
+  globalBytes: number;
+  localFiles: number;
+  localBytes: number;
+  needFiles: number;
+  needBytes: number;
+  pullErrors: number;
+  paused: boolean;
+  devices: string[];
+}
+
+export interface SyncthingConnectionState {
+  totalConnections: number;
+  activeConnections: number;
+  connections: Record<
+    string,
+    {
+      connected: boolean;
+      paused: boolean;
+      address?: string;
+      type?: string;
+      inBytesTotal: number;
+      outBytesTotal: number;
+      clientVersion?: string;
+    }
+  >;
+}
+
+export interface SyncthingTransferState {
+  inRateBytesPerSec: number;
+  outRateBytesPerSec: number;
+  totalNeedBytes: number;
+  totalGlobalBytes: number;
+  completionPercentage: number;
+  isSyncing: boolean;
+  activeTransfers: ActiveTransfer[];
+}
+
+export interface SyncthingState {
+  installed: boolean;
+  running: boolean;
+  version?: string;
+  myID?: string;
+  guiAddress?: string;
+  apiUrl: string;
+  uptimeSeconds?: number;
+  devices: SyncthingDevice[];
+  folders: SyncthingFolder[];
+  connectionState: SyncthingConnectionState;
+  transferState: SyncthingTransferState;
+}
+
 export interface DeviceSyncthingState {
   installed: boolean;
   running: boolean;

@@ -1,5 +1,13 @@
 import { AgentHealthResponse, SystemHardwareInfo } from '@hermes-hub/protocol';
-import { Device } from '@hermes-hub/types';
+import {
+  Device,
+  TailscaleState,
+  SyncthingState,
+  SyncthingDevice,
+  SyncthingFolder,
+  SyncthingConnectionState,
+  SyncthingTransferState,
+} from '@hermes-hub/types';
 import { DEFAULT_AGENT_PORT } from '../health/AgentServer.js';
 
 export class AgentClient {
@@ -93,6 +101,46 @@ export class AgentClient {
     });
     if (!res.ok) {
       throw new Error(`Failed to ping Tailscale peer: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getSyncthingState(): Promise<SyncthingState> {
+    const res = await this.fetchWithTimeout('/syncthing');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch Syncthing state: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getSyncthingDevices(): Promise<SyncthingDevice[]> {
+    const res = await this.fetchWithTimeout('/syncthing/devices');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch Syncthing devices: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getSyncthingFolders(): Promise<SyncthingFolder[]> {
+    const res = await this.fetchWithTimeout('/syncthing/folders');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch Syncthing folders: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getSyncthingConnections(): Promise<SyncthingConnectionState> {
+    const res = await this.fetchWithTimeout('/syncthing/connections');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch Syncthing connections: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getSyncthingTransfer(): Promise<SyncthingTransferState> {
+    const res = await this.fetchWithTimeout('/syncthing/transfer');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch Syncthing transfer state: ${res.status}`);
     }
     return res.json();
   }

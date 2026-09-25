@@ -2,7 +2,8 @@ import http from 'node:http';
 import { DeviceIdentityService } from '../devices/DeviceService.js';
 import { HealthMonitorService } from './HealthMonitor.js';
 import { HermesService } from '../hermes/HermesAdapter.js';
-import { TailscaleAdapter } from '../tailscale/TailscaleAdapter.js';
+import { TailscaleAdapter, ITailscaleAdapter } from '../tailscale/TailscaleAdapter.js';
+import { SyncthingAdapter, ISyncthingAdapter } from '../sync/SyncthingAdapter.js';
 
 export const DEFAULT_AGENT_PORT = 48199;
 
@@ -12,18 +13,21 @@ export class AgentServer {
   private identityService: DeviceIdentityService;
   private healthMonitor: HealthMonitorService;
   private hermesService: HermesService;
-  private tailscaleAdapter: TailscaleAdapter;
+  private tailscaleAdapter: ITailscaleAdapter;
+  private syncthingAdapter: ISyncthingAdapter;
 
   constructor(
     identityService?: DeviceIdentityService,
     healthMonitor?: HealthMonitorService,
     hermesService?: HermesService,
-    tailscaleAdapter?: TailscaleAdapter
+    tailscaleAdapter?: ITailscaleAdapter,
+    syncthingAdapter?: ISyncthingAdapter
   ) {
     this.identityService = identityService || new DeviceIdentityService();
     this.healthMonitor = healthMonitor || new HealthMonitorService(this.identityService);
     this.hermesService = hermesService || new HermesService();
     this.tailscaleAdapter = tailscaleAdapter || new TailscaleAdapter();
+    this.syncthingAdapter = syncthingAdapter || new SyncthingAdapter();
   }
 
   /**
@@ -96,6 +100,41 @@ export class AgentServer {
                 res.end(JSON.stringify({ error: e.message || 'Invalid request body' }));
               }
             });
+            return;
+          }
+
+          if (req.method === 'GET' && (url === '/syncthing' || url === '/syncthing/state')) {
+            const state = await this.syncthingAdapter.getState();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(state));
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/syncthing/devices') {
+            const devices = await this.syncthingAdapter.getDevices();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(devices));
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/syncthing/folders') {
+            const folders = await this.syncthingAdapter.getFolders();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(folders));
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/syncthing/connections') {
+            const conns = await this.syncthingAdapter.getConnectionState();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(conns));
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/syncthing/transfer') {
+            const transfer = await this.syncthingAdapter.getTransferState();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(transfer));
             return;
           }
 

@@ -8,3 +8,4 @@ export * from './health/HealthMonitor.js';
 export * from './health/AgentServer.js';
 export * from './client/AgentClient.js';
 export * from './tailscale/TailscaleAdapter.js';
+export * from './sync/SyncthingAdapter.js';

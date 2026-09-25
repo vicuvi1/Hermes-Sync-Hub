@@ -32,6 +32,9 @@ export const IPC_CHANNELS = {
   // Milestone 4 Tailscale Integration channels
   GET_TAILSCALE_STATE: 'hermes-hub:get-tailscale-state',
   PING_TAILSCALE_PEER: 'hermes-hub:ping-tailscale-peer',
+
+  // Milestone 5 Syncthing Integration channels
+  GET_SYNCTHING_STATE: 'hermes-hub:get-syncthing-state',
 } as const;
 
 export interface PairingCodePayload {

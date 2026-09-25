@@ -3,7 +3,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
 import { MOCK_DEVICES, MOCK_OVERALL_STATS, redactSecrets } from '@hermes-hub/shared';
-import { DeviceIdentityService, AgentServer, HealthMonitorService, HermesService, TailscaleAdapter } from '@hermes-hub/agent';
+import {
+  DeviceIdentityService,
+  AgentServer,
+  HealthMonitorService,
+  HermesService,
+  TailscaleAdapter,
+  SyncthingAdapter,
+} from '@hermes-hub/agent';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,7 +20,14 @@ const deviceIdentity = new DeviceIdentityService();
 const healthMonitor = new HealthMonitorService(deviceIdentity);
 const hermesService = new HermesService();
 const tailscaleAdapter = new TailscaleAdapter();
-const agentServer = new AgentServer(deviceIdentity, healthMonitor, hermesService, tailscaleAdapter);
+const syncthingAdapter = new SyncthingAdapter();
+const agentServer = new AgentServer(
+  deviceIdentity,
+  healthMonitor,
+  hermesService,
+  tailscaleAdapter,
+  syncthingAdapter
+);
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -54,7 +68,7 @@ function createWindow() {
   });
 }
 
-// Milestone 2 & 4 IPC Handlers for Local Device Agent & Network State
+// Milestone 2, 4 & 5 IPC Handlers for Local Device Agent & Network/Sync State
 ipcMain.handle(IPC_CHANNELS.GET_LOCAL_DEVICE, async () => {
   const localDev = deviceIdentity.getLocalDevice();
   try {
@@ -76,6 +90,20 @@ ipcMain.handle(IPC_CHANNELS.GET_LOCAL_DEVICE, async () => {
       };
     }
   } catch {}
+
+  try {
+    const syncState = await syncthingAdapter.getState();
+    if (syncState.installed) {
+      localDev.syncthing = {
+        installed: syncState.installed,
+        running: syncState.running,
+        deviceId: syncState.myID || localDev.syncthing.deviceId,
+        version: syncState.version || localDev.syncthing.version,
+        foldersCount: syncState.folders.length,
+      };
+    }
+  } catch {}
+
   return localDev;
 });
 
@@ -99,6 +127,10 @@ ipcMain.handle(IPC_CHANNELS.PING_TAILSCALE_PEER, async (_event, ipOrHost: string
   return tailscaleAdapter.pingPeer(ipOrHost);
 });
 
+ipcMain.handle(IPC_CHANNELS.GET_SYNCTHING_STATE, async () => {
+  return syncthingAdapter.getState();
+});
+
 ipcMain.handle(IPC_CHANNELS.GET_DEVICES, async () => {
   const localDev = deviceIdentity.getLocalDevice();
   try {
@@ -120,6 +152,20 @@ ipcMain.handle(IPC_CHANNELS.GET_DEVICES, async () => {
       };
     }
   } catch {}
+
+  try {
+    const syncState = await syncthingAdapter.getState();
+    if (syncState.installed) {
+      localDev.syncthing = {
+        installed: syncState.installed,
+        running: syncState.running,
+        deviceId: syncState.myID || localDev.syncthing.deviceId,
+        version: syncState.version || localDev.syncthing.version,
+        foldersCount: syncState.folders.length,
+      };
+    }
+  } catch {}
+
   // Merge real local device as primary with peer devices
   const peers = MOCK_DEVICES.filter((d) => d.deviceName !== localDev.deviceName);
   return [localDev, ...peers];

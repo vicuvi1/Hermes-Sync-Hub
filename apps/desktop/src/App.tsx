@@ -25,7 +25,7 @@ import {
   MOCK_ACTIVITY,
   MOCK_BACKUPS,
 } from '@hermes-hub/shared';
-import { Device, VaultSecret, BackupRecord, TailscaleState } from '@hermes-hub/types';
+import { Device, VaultSecret, BackupRecord, TailscaleState, SyncthingState } from '@hermes-hub/types';
 import { AgentHealthResponse } from '@hermes-hub/protocol';
 
 declare global {
@@ -42,6 +42,7 @@ declare global {
       getHermesStatus: () => Promise<any>;
       getTailscaleState: () => Promise<TailscaleState>;
       pingTailscalePeer: (ipOrHost: string) => Promise<{ success: boolean; latencyMs?: number; via?: string }>;
+      getSyncthingState: () => Promise<SyncthingState>;
     };
   }
 }
@@ -61,12 +62,13 @@ export const App: React.FC = () => {
 
   const [agentHealth, setAgentHealth] = useState<AgentHealthResponse | null>(null);
   const [tailscaleState, setTailscaleState] = useState<TailscaleState | null>(null);
+  const [syncthingState, setSyncthingState] = useState<SyncthingState | null>(null);
   const [isAddDeviceOpen, setIsAddDeviceOpen] = useState(false);
   const [selectedDeviceModal, setSelectedDeviceModal] = useState<Device | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
 
-  // Milestone 2 & 4: Load real local device, agent health & Tailscale state from Desktop IPC
+  // Milestone 2, 4 & 5: Load real local device, agent health, Tailscale & Syncthing state from Desktop IPC
   const fetchTailscaleState = async () => {
     if (window.hermesHub?.getTailscaleState) {
       try {
@@ -80,14 +82,31 @@ export const App: React.FC = () => {
     }
   };
 
+  const fetchSyncthingState = async () => {
+    if (window.hermesHub?.getSyncthingState) {
+      try {
+        const sync = await window.hermesHub.getSyncthingState();
+        if (sync) {
+          setSyncthingState(sync);
+          if (sync.transferState?.activeTransfers?.length > 0) {
+            setActiveTransfer(sync.transferState.activeTransfers[0]);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load Syncthing state:', err);
+      }
+    }
+  };
+
   useEffect(() => {
     async function initLocalAgent() {
       if (window.hermesHub) {
         try {
-          const [loadedDevices, health, ts] = await Promise.all([
+          const [loadedDevices, health, ts, sync] = await Promise.all([
             window.hermesHub.getDevices(),
             window.hermesHub.getAgentHealth(),
             window.hermesHub.getTailscaleState ? window.hermesHub.getTailscaleState() : Promise.resolve(null),
+            window.hermesHub.getSyncthingState ? window.hermesHub.getSyncthingState() : Promise.resolve(null),
           ]);
           if (loadedDevices && loadedDevices.length > 0) {
             setDevices(loadedDevices);
@@ -97,6 +116,12 @@ export const App: React.FC = () => {
           }
           if (ts) {
             setTailscaleState(ts);
+          }
+          if (sync) {
+            setSyncthingState(sync);
+            if (sync.transferState?.activeTransfers?.length > 0) {
+              setActiveTransfer(sync.transferState.activeTransfers[0]);
+            }
           }
         } catch (err) {
           console.warn('Failed to initialize local agent data over IPC:', err);
@@ -304,6 +329,8 @@ export const App: React.FC = () => {
               tailscaleState={tailscaleState}
               onPingTailscalePeer={handlePingTailscalePeer}
               onRefreshTailscale={fetchTailscaleState}
+              syncthingState={syncthingState}
+              onRefreshSyncthing={fetchSyncthingState}
             />
           )}
         </main>
