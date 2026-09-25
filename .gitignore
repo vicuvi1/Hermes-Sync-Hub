@@ -1,0 +1,69 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+dist/
+dist-electron/
+release/
+out/
+build/
+
+# Environment and Secrets (CRITICAL SECURITY)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+id_rsa*
+*.secret
+credentials.json
+token.json
+google_token.json
+auth.json
+auth.lock
+
+# Hermes Data Protection (NEVER commit live agent or sync data)
+state.db
+state.db*
+kanban.db*
+projects.db*
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+sessions/
+memories/
+HermesHubData/
+HermesHubData/**
+snapshots/
+backups/
+vault/
+*.bak
+fleet_restart_pending
+processes.json
+spawn-ledger.json
+context_length_cache.yaml
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and Diagnostics
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+diagnostics/
+
+# Test coverage
+coverage/
+.nyc_output/

@@ -1,0 +1,11 @@
+import { contextBridge, ipcRenderer } from 'electron';
+import { IPC_CHANNELS } from '@hermes-hub/protocol';
+
+// Expose safe, typed API to Renderer process
+contextBridge.exposeInMainWorld('hermesHub', {
+  platform: process.platform,
+  getDevices: () => ipcRenderer.invoke(IPC_CHANNELS.GET_DEVICES),
+  triggerSync: () => ipcRenderer.invoke(IPC_CHANNELS.TRIGGER_SYNC_NOW),
+  openFolder: (path: string) => ipcRenderer.invoke(IPC_CHANNELS.OPEN_FOLDER, path),
+  exportDiagnostics: () => ipcRenderer.invoke(IPC_CHANNELS.EXPORT_DIAGNOSTICS),
+});
