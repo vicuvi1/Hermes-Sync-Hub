@@ -3,11 +3,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
 import { MOCK_DEVICES, MOCK_OVERALL_STATS, redactSecrets } from '@hermes-hub/shared';
+import { DeviceIdentityService, AgentServer, HealthMonitorService } from '@hermes-hub/agent';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
+const deviceIdentity = new DeviceIdentityService();
+const healthMonitor = new HealthMonitorService(deviceIdentity);
+const agentServer = new AgentServer(deviceIdentity, healthMonitor);
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -48,9 +52,24 @@ function createWindow() {
   });
 }
 
-// IPC Handlers
+// Milestone 2 IPC Handlers for Local Device Agent
+ipcMain.handle(IPC_CHANNELS.GET_LOCAL_DEVICE, async () => {
+  return deviceIdentity.getLocalDevice();
+});
+
+ipcMain.handle(IPC_CHANNELS.GET_AGENT_HEALTH, async () => {
+  return healthMonitor.getHealthSnapshot();
+});
+
+ipcMain.handle(IPC_CHANNELS.PING_AGENT, async () => {
+  return { pong: true, time: new Date().toISOString() };
+});
+
 ipcMain.handle(IPC_CHANNELS.GET_DEVICES, async () => {
-  return MOCK_DEVICES;
+  const localDev = deviceIdentity.getLocalDevice();
+  // Merge real local device as primary with peer devices
+  const peers = MOCK_DEVICES.filter((d) => d.deviceName !== localDev.deviceName);
+  return [localDev, ...peers];
 });
 
 ipcMain.handle(IPC_CHANNELS.GET_OVERALL_STATS, async () => {
@@ -62,9 +81,11 @@ ipcMain.handle(IPC_CHANNELS.TRIGGER_SYNC_NOW, async () => {
 });
 
 ipcMain.handle(IPC_CHANNELS.EXPORT_DIAGNOSTICS, async () => {
-  const dummyLog = `Log entry: user key sk-or-v1-98a417df8b6e2104bcde190847321fa890123ef configured.`;
+  const health = await healthMonitor.getHealthSnapshot();
+  const dummyLog = `Log entry: user key sk-or-v1-98a417df8b6e2104bcde190847321fa890123ef configured for device ${health.deviceId}.`;
   return {
     success: true,
+    health,
     redactedLog: redactSecrets(dummyLog),
   };
 });
@@ -74,7 +95,14 @@ ipcMain.handle(IPC_CHANNELS.OPEN_FOLDER, async (_event, folderPath: string) => {
   return true;
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  try {
+    const port = await agentServer.start();
+    console.log(`[AgentServer] Loopback HTTP server running on 127.0.0.1:${port}`);
+  } catch (err) {
+    console.warn(`[AgentServer] Failed to bind default port, running in-process:`, err);
+  }
+
   createWindow();
 
   app.on('activate', () => {
@@ -88,4 +116,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
+});
+
+app.on('before-quit', async () => {
+  await agentServer.stop();
 });

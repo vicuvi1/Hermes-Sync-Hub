@@ -5,3 +5,5 @@ export * from './sync/SyncService.js';
 export * from './vault/VaultService.js';
 export * from './backup/BackupService.js';
 export * from './health/HealthMonitor.js';
+export * from './health/AgentServer.js';
+export * from './client/AgentClient.js';

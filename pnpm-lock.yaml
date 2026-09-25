@@ -36,6 +36,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@hermes-hub/agent':
+        specifier: workspace:*
+        version: link:../agent
       '@hermes-hub/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

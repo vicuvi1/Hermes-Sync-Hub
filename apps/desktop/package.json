@@ -15,6 +15,7 @@
     "@hermes-hub/shared": "workspace:*",
     "@hermes-hub/types": "workspace:*",
     "@hermes-hub/ui": "workspace:*",
+    "@hermes-hub/agent": "workspace:*",
     "clsx": "^2.1.1",
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",

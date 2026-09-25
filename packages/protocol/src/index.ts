@@ -1,4 +1,4 @@
-import { Device, ActiveTransfer } from '@hermes-hub/types';
+import { Device, ActiveTransfer, HealthStatusType, OperatingSystem } from '@hermes-hub/types';
 
 export const IPC_CHANNELS = {
   GET_DEVICES: 'hermes-hub:get-devices',
@@ -20,6 +20,11 @@ export const IPC_CHANNELS = {
   EXPORT_DIAGNOSTICS: 'hermes-hub:export-diagnostics',
   OPEN_EXTERNAL_URL: 'hermes-hub:open-external-url',
   OPEN_FOLDER: 'hermes-hub:open-folder',
+
+  // Milestone 2 Local Agent channels
+  GET_LOCAL_DEVICE: 'hermes-hub:get-local-device',
+  GET_AGENT_HEALTH: 'hermes-hub:get-agent-health',
+  PING_AGENT: 'hermes-hub:ping-agent',
 } as const;
 
 export interface PairingCodePayload {
@@ -42,4 +47,33 @@ export interface PairingResult {
     hermesDiscovered: boolean;
     initialSyncStarted: boolean;
   };
+}
+
+export interface AgentHealthResponse {
+  status: HealthStatusType;
+  uptimeSeconds: number;
+  version: string;
+  deviceId: string;
+  hostname: string;
+  os: OperatingSystem;
+  pid: number;
+  timestamp: string;
+  memoryUsageMb: {
+    rss: number;
+    heapUsed: number;
+  };
+}
+
+export interface SystemHardwareInfo {
+  hostname: string;
+  os: OperatingSystem;
+  platform: string;
+  release: string;
+  version: string;
+  architecture: string;
+  cpuModel: string;
+  cpuCores: number;
+  totalMemoryBytes: number;
+  freeMemoryBytes: number;
+  uptimeSeconds: number;
 }
