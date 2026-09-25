@@ -25,6 +25,9 @@ export const IPC_CHANNELS = {
   GET_LOCAL_DEVICE: 'hermes-hub:get-local-device',
   GET_AGENT_HEALTH: 'hermes-hub:get-agent-health',
   PING_AGENT: 'hermes-hub:ping-agent',
+
+  // Milestone 3 Hermes Detection channels
+  GET_HERMES_STATUS: 'hermes-hub:get-hermes-status',
 } as const;
 
 export interface PairingCodePayload {

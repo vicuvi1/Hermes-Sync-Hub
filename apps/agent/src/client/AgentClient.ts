@@ -68,4 +68,12 @@ export class AgentClient {
     }
     return res.json();
   }
+
+  async getHermesStatus(): Promise<any> {
+    const res = await this.fetchWithTimeout('/hermes');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch Hermes status: ${res.status}`);
+    }
+    return res.json();
+  }
 }

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
 import { MOCK_DEVICES, MOCK_OVERALL_STATS, redactSecrets } from '@hermes-hub/shared';
-import { DeviceIdentityService, AgentServer, HealthMonitorService } from '@hermes-hub/agent';
+import { DeviceIdentityService, AgentServer, HealthMonitorService, HermesService } from '@hermes-hub/agent';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,7 +11,8 @@ const __dirname = path.dirname(__filename);
 let mainWindow: BrowserWindow | null = null;
 const deviceIdentity = new DeviceIdentityService();
 const healthMonitor = new HealthMonitorService(deviceIdentity);
-const agentServer = new AgentServer(deviceIdentity, healthMonitor);
+const hermesService = new HermesService();
+const agentServer = new AgentServer(deviceIdentity, healthMonitor, hermesService);
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -63,6 +64,10 @@ ipcMain.handle(IPC_CHANNELS.GET_AGENT_HEALTH, async () => {
 
 ipcMain.handle(IPC_CHANNELS.PING_AGENT, async () => {
   return { pong: true, time: new Date().toISOString() };
+});
+
+ipcMain.handle(IPC_CHANNELS.GET_HERMES_STATUS, async () => {
+  return hermesService.getStatus();
 });
 
 ipcMain.handle(IPC_CHANNELS.GET_DEVICES, async () => {

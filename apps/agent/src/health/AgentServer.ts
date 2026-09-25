@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { DeviceIdentityService } from '../devices/DeviceService.js';
 import { HealthMonitorService } from './HealthMonitor.js';
+import { HermesService } from '../hermes/HermesAdapter.js';
 
 export const DEFAULT_AGENT_PORT = 48199;
 
@@ -9,10 +10,16 @@ export class AgentServer {
   private port: number = DEFAULT_AGENT_PORT;
   private identityService: DeviceIdentityService;
   private healthMonitor: HealthMonitorService;
+  private hermesService: HermesService;
 
-  constructor(identityService?: DeviceIdentityService, healthMonitor?: HealthMonitorService) {
+  constructor(
+    identityService?: DeviceIdentityService,
+    healthMonitor?: HealthMonitorService,
+    hermesService?: HermesService
+  ) {
     this.identityService = identityService || new DeviceIdentityService();
     this.healthMonitor = healthMonitor || new HealthMonitorService(this.identityService);
+    this.hermesService = hermesService || new HermesService();
   }
 
   /**
@@ -53,6 +60,13 @@ export class AgentServer {
             const hardware = this.identityService.getSystemHardwareInfo();
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(hardware));
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/hermes') {
+            const hermesStatus = await this.hermesService.getStatus();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(hermesStatus));
             return;
           }
 

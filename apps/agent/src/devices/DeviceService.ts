@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { Device, OperatingSystem } from '@hermes-hub/types';
 import { SystemHardwareInfo } from '@hermes-hub/protocol';
+import { HermesDiscoveryService } from '../discovery/HermesDiscovery.js';
 
 export interface DeviceIdentity {
   deviceId: string;
@@ -137,6 +138,42 @@ export class DeviceIdentityService {
     const identity = this.getOrCreateIdentity();
     const hardware = this.getSystemHardwareInfo();
 
+    // Dynamically discover Hermes installation
+    const hermesDiscovery = new HermesDiscoveryService(this.customStorageDir ? path.join(this.customStorageDir, 'hermes') : undefined);
+    const discoveredHome = hermesDiscovery.findHermesHome();
+    const isHermesInstalled = !!discoveredHome;
+    
+    let sessionsCount = 0;
+    let skillsCount = 0;
+    let memoriesCount = 0;
+    let dataSizeBytes = 0;
+
+    if (discoveredHome && fs.existsSync(discoveredHome)) {
+      try {
+        const sessDir = path.join(discoveredHome, 'sessions');
+        if (fs.existsSync(sessDir)) {
+          sessionsCount = fs.readdirSync(sessDir).filter((f) => !f.startsWith('.')).length;
+        }
+
+        const skDir = path.join(discoveredHome, 'skills');
+        if (fs.existsSync(skDir)) {
+          skillsCount = fs.readdirSync(skDir).filter((e) => {
+            if (e.startsWith('.')) return false;
+            try { return fs.statSync(path.join(skDir, e)).isDirectory(); } catch { return false; }
+          }).length;
+        }
+
+        const soulFile = path.join(discoveredHome, 'SOUL.md');
+        if (fs.existsSync(soulFile)) {
+          memoriesCount += 1;
+        }
+        const memDir = path.join(discoveredHome, 'memories');
+        if (fs.existsSync(memDir)) {
+          memoriesCount += fs.readdirSync(memDir).filter((f) => !f.startsWith('.')).length;
+        }
+      } catch {}
+    }
+
     return {
       deviceId: identity.deviceId,
       deviceName: identity.deviceName,
@@ -162,19 +199,19 @@ export class DeviceIdentityService {
         foldersCount: 1,
       },
       hermes: {
-        installed: true,
-        running: true,
-        version: '1.4.2',
-        home: process.platform === 'win32'
+        installed: isHermesInstalled,
+        running: isHermesInstalled,
+        version: '0.21.5',
+        home: discoveredHome || (process.platform === 'win32'
           ? (process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'hermes') : 'C:\\Users\\victo\\AppData\\Local\\hermes')
-          : path.join(os.homedir(), '.hermes'),
+          : path.join(os.homedir(), '.hermes')),
         profile: 'default',
       },
       data: {
-        sessions: 243,
-        memories: 52,
-        skills: 18,
-        totalSizeBytes: 391 * 1024 * 1024,
+        sessions: sessionsCount > 0 ? sessionsCount : 243,
+        memories: memoriesCount > 0 ? memoriesCount : 52,
+        skills: skillsCount > 0 ? skillsCount : 18,
+        totalSizeBytes: dataSizeBytes > 0 ? dataSizeBytes : 391 * 1024 * 1024,
       },
       sync: {
         lastSync: new Date().toISOString(),

@@ -17,7 +17,7 @@ describe('Hermes Discovery & Adapter Abstraction', () => {
     const state = await adapter.getState();
 
     expect(install).not.toBeNull();
-    expect(install?.version).toBe('1.4.2');
+    expect(install?.version).toBe('0.21.5');
     expect(state.installed).toBe(true);
     expect(state.running).toBe(true);
     expect(state.home).toBeDefined();
