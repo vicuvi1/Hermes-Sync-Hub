@@ -2,6 +2,42 @@ export type OperatingSystem = 'windows' | 'macos' | 'linux';
 export type SyncStatusType = 'in-sync' | 'syncing' | 'pending' | 'offline' | 'conflict';
 export type HealthStatusType = 'healthy' | 'warning' | 'degraded' | 'offline';
 
+export interface TailscalePeer {
+  id: string;
+  hostname: string;
+  dnsName: string;
+  os: string;
+  tailscaleIps: string[];
+  ipv4?: string;
+  online: boolean;
+  active: boolean;
+  curAddr?: string;
+  relay?: string;
+  connectionType: 'direct' | 'derp-relay' | 'offline';
+  lastSeen?: string;
+}
+
+export interface TailscaleState {
+  installed: boolean;
+  connected: boolean;
+  backendState: 'Running' | 'Stopped' | 'NeedsLogin' | 'Starting' | 'NoState' | 'NotInstalled';
+  version?: string;
+  self?: {
+    id: string;
+    hostname: string;
+    dnsName: string;
+    tailscaleIps: string[];
+    ipv4?: string;
+    ipv6?: string;
+    online: boolean;
+  };
+  peers: TailscalePeer[];
+  tailnetName?: string;
+  magicDnsSuffix?: string;
+  directPeersCount: number;
+  relayedPeersCount: number;
+}
+
 export interface DeviceTailscaleState {
   installed: boolean;
   connected: boolean;

@@ -2,6 +2,7 @@ import http from 'node:http';
 import { DeviceIdentityService } from '../devices/DeviceService.js';
 import { HealthMonitorService } from './HealthMonitor.js';
 import { HermesService } from '../hermes/HermesAdapter.js';
+import { TailscaleAdapter } from '../tailscale/TailscaleAdapter.js';
 
 export const DEFAULT_AGENT_PORT = 48199;
 
@@ -11,15 +12,18 @@ export class AgentServer {
   private identityService: DeviceIdentityService;
   private healthMonitor: HealthMonitorService;
   private hermesService: HermesService;
+  private tailscaleAdapter: TailscaleAdapter;
 
   constructor(
     identityService?: DeviceIdentityService,
     healthMonitor?: HealthMonitorService,
-    hermesService?: HermesService
+    hermesService?: HermesService,
+    tailscaleAdapter?: TailscaleAdapter
   ) {
     this.identityService = identityService || new DeviceIdentityService();
     this.healthMonitor = healthMonitor || new HealthMonitorService(this.identityService);
     this.hermesService = hermesService || new HermesService();
+    this.tailscaleAdapter = tailscaleAdapter || new TailscaleAdapter();
   }
 
   /**
@@ -67,6 +71,31 @@ export class AgentServer {
             const hermesStatus = await this.hermesService.getStatus();
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(hermesStatus));
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/tailscale') {
+            const tailscaleState = await this.tailscaleAdapter.getState();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(tailscaleState));
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/tailscale/ping') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const target = parsed.ipOrHost || '100.84.12.20';
+                const result = await this.tailscaleAdapter.pingPeer(target);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+              } catch (e: any) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: e.message || 'Invalid request body' }));
+              }
+            });
             return;
           }
 

@@ -28,6 +28,10 @@ export const IPC_CHANNELS = {
 
   // Milestone 3 Hermes Detection channels
   GET_HERMES_STATUS: 'hermes-hub:get-hermes-status',
+
+  // Milestone 4 Tailscale Integration channels
+  GET_TAILSCALE_STATE: 'hermes-hub:get-tailscale-state',
+  PING_TAILSCALE_PEER: 'hermes-hub:ping-tailscale-peer',
 } as const;
 
 export interface PairingCodePayload {

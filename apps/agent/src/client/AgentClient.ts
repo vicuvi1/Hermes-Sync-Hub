@@ -76,4 +76,24 @@ export class AgentClient {
     }
     return res.json();
   }
+
+  async getTailscaleState(): Promise<any> {
+    const res = await this.fetchWithTimeout('/tailscale');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch Tailscale state: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async pingTailscalePeer(ipOrHost: string): Promise<any> {
+    const res = await this.fetchWithTimeout('/tailscale/ping', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ipOrHost }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to ping Tailscale peer: ${res.status}`);
+    }
+    return res.json();
+  }
 }

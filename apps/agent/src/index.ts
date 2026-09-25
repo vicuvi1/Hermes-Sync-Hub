@@ -7,3 +7,4 @@ export * from './backup/BackupService.js';
 export * from './health/HealthMonitor.js';
 export * from './health/AgentServer.js';
 export * from './client/AgentClient.js';
+export * from './tailscale/TailscaleAdapter.js';

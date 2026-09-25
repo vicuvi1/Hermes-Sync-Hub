@@ -25,7 +25,7 @@ import {
   MOCK_ACTIVITY,
   MOCK_BACKUPS,
 } from '@hermes-hub/shared';
-import { Device, VaultSecret, BackupRecord } from '@hermes-hub/types';
+import { Device, VaultSecret, BackupRecord, TailscaleState } from '@hermes-hub/types';
 import { AgentHealthResponse } from '@hermes-hub/protocol';
 
 declare global {
@@ -39,6 +39,9 @@ declare global {
       triggerSync: () => Promise<{ success: boolean }>;
       openFolder: (path: string) => Promise<boolean>;
       exportDiagnostics: () => Promise<{ success: boolean; health: any; redactedLog: string }>;
+      getHermesStatus: () => Promise<any>;
+      getTailscaleState: () => Promise<TailscaleState>;
+      pingTailscalePeer: (ipOrHost: string) => Promise<{ success: boolean; latencyMs?: number; via?: string }>;
     };
   }
 }
@@ -57,25 +60,43 @@ export const App: React.FC = () => {
   const [backups, setBackups] = useState<BackupRecord[]>(MOCK_BACKUPS);
 
   const [agentHealth, setAgentHealth] = useState<AgentHealthResponse | null>(null);
+  const [tailscaleState, setTailscaleState] = useState<TailscaleState | null>(null);
   const [isAddDeviceOpen, setIsAddDeviceOpen] = useState(false);
   const [selectedDeviceModal, setSelectedDeviceModal] = useState<Device | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
 
-  // Milestone 2: Load real local device & agent health from Desktop IPC
+  // Milestone 2 & 4: Load real local device, agent health & Tailscale state from Desktop IPC
+  const fetchTailscaleState = async () => {
+    if (window.hermesHub?.getTailscaleState) {
+      try {
+        const ts = await window.hermesHub.getTailscaleState();
+        if (ts) {
+          setTailscaleState(ts);
+        }
+      } catch (err) {
+        console.warn('Failed to load Tailscale state:', err);
+      }
+    }
+  };
+
   useEffect(() => {
     async function initLocalAgent() {
       if (window.hermesHub) {
         try {
-          const [loadedDevices, health] = await Promise.all([
+          const [loadedDevices, health, ts] = await Promise.all([
             window.hermesHub.getDevices(),
             window.hermesHub.getAgentHealth(),
+            window.hermesHub.getTailscaleState ? window.hermesHub.getTailscaleState() : Promise.resolve(null),
           ]);
           if (loadedDevices && loadedDevices.length > 0) {
             setDevices(loadedDevices);
           }
           if (health) {
             setAgentHealth(health);
+          }
+          if (ts) {
+            setTailscaleState(ts);
           }
         } catch (err) {
           console.warn('Failed to initialize local agent data over IPC:', err);
@@ -108,6 +129,28 @@ export const App: React.FC = () => {
     await new Promise((r) => setTimeout(r, 8));
     showNotification('Agent responded in 8ms (loopback IPC) ✓');
     return 8;
+  };
+
+  const handlePingTailscalePeer = async (ipOrHost: string): Promise<{ success: boolean; latencyMs?: number; via?: string }> => {
+    if (window.hermesHub?.pingTailscalePeer) {
+      try {
+        const res = await window.hermesHub.pingTailscalePeer(ipOrHost);
+        if (res.success) {
+          showNotification(`Tailscale ping to ${ipOrHost}: ${res.latencyMs || 12}ms via ${res.via || 'direct'} ✓`);
+        } else {
+          showNotification(`Tailscale ping to ${ipOrHost} timed out / unreachable`);
+        }
+        return res;
+      } catch (err: any) {
+        showNotification(`Tailscale ping error: ${err.message || 'Failed'}`);
+        return { success: false };
+      }
+    }
+    // Simulation fallback
+    await new Promise((r) => setTimeout(r, 18));
+    const mockLatency = Math.floor(Math.random() * 8) + 12;
+    showNotification(`Tailscale ping to ${ipOrHost}: ${mockLatency}ms via direct (simulated) ✓`);
+    return { success: true, latencyMs: mockLatency, via: 'direct' };
   };
 
   const handleSyncNow = async () => {
@@ -258,6 +301,9 @@ export const App: React.FC = () => {
               onExportDiagnostics={handleExportDiagnostics}
               agentHealth={agentHealth}
               onPingAgent={handlePingAgent}
+              tailscaleState={tailscaleState}
+              onPingTailscalePeer={handlePingTailscalePeer}
+              onRefreshTailscale={fetchTailscaleState}
             />
           )}
         </main>
