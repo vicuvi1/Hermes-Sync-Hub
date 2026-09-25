@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { DeviceIdentityService } from '../devices/DeviceService.js';
+import { DeviceRegistryService } from '../devices/DeviceRegistry.js';
 import { HealthMonitorService } from './HealthMonitor.js';
 import { HermesService } from '../hermes/HermesAdapter.js';
 import { TailscaleAdapter, ITailscaleAdapter } from '../tailscale/TailscaleAdapter.js';
@@ -11,6 +12,7 @@ export class AgentServer {
   private server: http.Server | null = null;
   private port: number = DEFAULT_AGENT_PORT;
   private identityService: DeviceIdentityService;
+  private deviceRegistry: DeviceRegistryService;
   private healthMonitor: HealthMonitorService;
   private hermesService: HermesService;
   private tailscaleAdapter: ITailscaleAdapter;
@@ -21,9 +23,11 @@ export class AgentServer {
     healthMonitor?: HealthMonitorService,
     hermesService?: HermesService,
     tailscaleAdapter?: ITailscaleAdapter,
-    syncthingAdapter?: ISyncthingAdapter
+    syncthingAdapter?: ISyncthingAdapter,
+    deviceRegistry?: DeviceRegistryService
   ) {
     this.identityService = identityService || new DeviceIdentityService();
+    this.deviceRegistry = deviceRegistry || new DeviceRegistryService(this.identityService);
     this.healthMonitor = healthMonitor || new HealthMonitorService(this.identityService);
     this.hermesService = hermesService || new HermesService();
     this.tailscaleAdapter = tailscaleAdapter || new TailscaleAdapter();
@@ -61,6 +65,58 @@ export class AgentServer {
             const device = this.identityService.getLocalDevice();
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(device));
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/devices') {
+            const devices = await this.deviceRegistry.reconcile(this.tailscaleAdapter, this.syncthingAdapter);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(devices));
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/devices') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const created = await this.deviceRegistry.addDevice(parsed);
+                res.writeHead(201, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(created));
+              } catch (err: any) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message || 'Invalid request body' }));
+              }
+            });
+            return;
+          }
+
+          if (req.method === 'DELETE' && url.startsWith('/devices/')) {
+            const deviceId = url.slice('/devices/'.length);
+            const success = await this.deviceRegistry.removeDevice(deviceId);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success }));
+            return;
+          }
+
+          if (req.method === 'GET' && url.startsWith('/devices/compare')) {
+            const fullUrl = new URL(req.url || '', 'http://127.0.0.1');
+            const a = fullUrl.searchParams.get('a');
+            const b = fullUrl.searchParams.get('b');
+            if (!a || !b) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: 'Missing query parameters a and b' }));
+              return;
+            }
+            try {
+              const comparison = await this.deviceRegistry.compareDevices(a, b);
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify(comparison));
+            } catch (err: any) {
+              res.writeHead(404, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: err.message || 'Comparison failed' }));
+            }
             return;
           }
 

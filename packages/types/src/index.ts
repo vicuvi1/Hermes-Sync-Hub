@@ -42,7 +42,7 @@ export interface DeviceTailscaleState {
   installed: boolean;
   connected: boolean;
   ip?: string;
-  connectionType?: 'direct' | 'derp-relay' | 'unknown';
+  connectionType?: 'direct' | 'derp-relay' | 'offline' | 'unknown';
   peersCount?: number;
 }
 
@@ -313,3 +313,31 @@ export interface OverallStats {
   conflictsCount: number;
   syncHealth: 'all_synced' | 'syncing' | 'offline_changes' | 'has_conflicts';
 }
+
+export interface DeviceComparison {
+  deviceA: Device;
+  deviceB: Device;
+  versionMatch: boolean;
+  sessionsDiff: {
+    deviceACount: number;
+    deviceBCount: number;
+    delta: number;
+  };
+  memoriesDiff: {
+    deviceACount: number;
+    deviceBCount: number;
+    delta: number;
+  };
+  skillsDiff: {
+    deviceACount: number;
+    deviceBCount: number;
+    delta: number;
+  };
+  dataSizeDiff: {
+    deviceABytes: number;
+    deviceBBytes: number;
+    deltaBytes: number;
+  };
+  syncStatus: 'identical' | 'ahead' | 'behind' | 'diverged';
+}
+

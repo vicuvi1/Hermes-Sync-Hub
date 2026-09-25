@@ -2,9 +2,11 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
+import { Device, OverallStats } from '@hermes-hub/types';
 import { MOCK_DEVICES, MOCK_OVERALL_STATS, redactSecrets } from '@hermes-hub/shared';
 import {
   DeviceIdentityService,
+  DeviceRegistryService,
   AgentServer,
   HealthMonitorService,
   HermesService,
@@ -17,6 +19,7 @@ const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
 const deviceIdentity = new DeviceIdentityService();
+const deviceRegistry = new DeviceRegistryService(deviceIdentity);
 const healthMonitor = new HealthMonitorService(deviceIdentity);
 const hermesService = new HermesService();
 const tailscaleAdapter = new TailscaleAdapter();
@@ -26,7 +29,8 @@ const agentServer = new AgentServer(
   healthMonitor,
   hermesService,
   tailscaleAdapter,
-  syncthingAdapter
+  syncthingAdapter,
+  deviceRegistry
 );
 
 function createWindow() {
@@ -132,47 +136,53 @@ ipcMain.handle(IPC_CHANNELS.GET_SYNCTHING_STATE, async () => {
 });
 
 ipcMain.handle(IPC_CHANNELS.GET_DEVICES, async () => {
-  const localDev = deviceIdentity.getLocalDevice();
-  try {
-    const tsState = await tailscaleAdapter.getState();
-    if (tsState.installed) {
-      localDev.tailscale = {
-        installed: tsState.installed,
-        connected: tsState.connected,
-        ip: tsState.self?.ipv4 || (tsState.self?.tailscaleIps && tsState.self.tailscaleIps[0]),
-        connectionType: 'direct',
-        peersCount: tsState.peers.length,
-      };
-    } else {
-      localDev.tailscale = {
-        installed: false,
-        connected: false,
-        connectionType: 'unknown',
-        peersCount: 0,
-      };
-    }
-  } catch {}
+  return deviceRegistry.reconcile(tailscaleAdapter, syncthingAdapter);
+});
 
-  try {
-    const syncState = await syncthingAdapter.getState();
-    if (syncState.installed) {
-      localDev.syncthing = {
-        installed: syncState.installed,
-        running: syncState.running,
-        deviceId: syncState.myID || localDev.syncthing.deviceId,
-        version: syncState.version || localDev.syncthing.version,
-        foldersCount: syncState.folders.length,
-      };
-    }
-  } catch {}
+ipcMain.handle(IPC_CHANNELS.GET_DEVICE_DETAIL, async (_event, deviceId: string) => {
+  return deviceRegistry.getDeviceById(deviceId);
+});
 
-  // Merge real local device as primary with peer devices
-  const peers = MOCK_DEVICES.filter((d) => d.deviceName !== localDev.deviceName);
-  return [localDev, ...peers];
+ipcMain.handle(IPC_CHANNELS.ADD_DEVICE, async (_event, deviceData: Partial<Device>) => {
+  return deviceRegistry.addDevice(deviceData);
+});
+
+ipcMain.handle(IPC_CHANNELS.REMOVE_DEVICE, async (_event, deviceId: string) => {
+  return deviceRegistry.removeDevice(deviceId);
+});
+
+ipcMain.handle(IPC_CHANNELS.UPDATE_DEVICE, async (_event, deviceId: string, updates: Partial<Device>) => {
+  return deviceRegistry.updateDevice(deviceId, updates);
+});
+
+ipcMain.handle(IPC_CHANNELS.COMPARE_DEVICES, async (_event, aId: string, bId: string) => {
+  return deviceRegistry.compareDevices(aId, bId);
 });
 
 ipcMain.handle(IPC_CHANNELS.GET_OVERALL_STATS, async () => {
-  return MOCK_OVERALL_STATS;
+  const devices = await deviceRegistry.getAllDevices();
+  const onlineCount = devices.filter((d) => d.online).length;
+  const sessionsCount = devices.reduce((sum, d) => sum + (d.data?.sessions || 0), 0);
+  const memoriesCount = devices.reduce((sum, d) => sum + (d.data?.memories || 0), 0);
+  const skillsCount = devices.reduce((sum, d) => sum + (d.data?.skills || 0), 0);
+  const pendingFilesCount = devices.reduce((sum, d) => sum + (d.sync?.pendingFiles || 0), 0);
+  const conflictsCount = devices.reduce((sum, d) => sum + (d.sync?.conflicts || 0), 0);
+
+  let syncHealth: OverallStats['syncHealth'] = 'all_synced';
+  if (conflictsCount > 0) syncHealth = 'has_conflicts';
+  else if (pendingFilesCount > 0) syncHealth = 'syncing';
+  else if (onlineCount < devices.length) syncHealth = 'offline_changes';
+
+  return {
+    devicesCount: devices.length,
+    onlineCount,
+    sessionsCount,
+    memoriesCount,
+    skillsCount,
+    pendingFilesCount,
+    conflictsCount,
+    syncHealth,
+  };
 });
 
 ipcMain.handle(IPC_CHANNELS.TRIGGER_SYNC_NOW, async () => {

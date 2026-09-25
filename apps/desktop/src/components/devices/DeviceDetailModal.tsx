@@ -14,6 +14,8 @@ import {
   Layers,
   HardDrive,
   Cpu,
+  GitCompare,
+  Trash2,
 } from 'lucide-react';
 
 interface DeviceDetailModalProps {
@@ -252,6 +254,20 @@ export const DeviceDetailModal: React.FC<DeviceDetailModalProps> = ({
               >
                 <Terminal className="h-3.5 w-3.5 text-zinc-400" />
                 <span>View Logs</span>
+              </button>
+              <button
+                onClick={() => onAction('compare_device', device)}
+                className="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-border bg-background hover:bg-muted text-xs font-medium text-foreground transition-colors"
+              >
+                <GitCompare className="h-3.5 w-3.5 text-cyan-500" />
+                <span>Compare Node</span>
+              </button>
+              <button
+                onClick={() => onAction('remove_device', device)}
+                className="flex items-center justify-center gap-2 p-2.5 rounded-xl border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 text-xs font-medium text-rose-500 transition-colors"
+              >
+                <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                <span>Remove Node</span>
               </button>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import { AgentHealthResponse, SystemHardwareInfo } from '@hermes-hub/protocol';
 import {
   Device,
+  DeviceComparison,
   TailscaleState,
   SyncthingState,
   SyncthingDevice,
@@ -57,6 +58,47 @@ export class AgentClient {
     const res = await this.fetchWithTimeout('/device');
     if (!res.ok) {
       throw new Error(`Failed to fetch local device info: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getDevices(): Promise<Device[]> {
+    const res = await this.fetchWithTimeout('/devices');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch devices: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async addDevice(deviceData: Partial<Device>): Promise<Device> {
+    const res = await this.fetchWithTimeout('/devices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(deviceData),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to add device: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async removeDevice(deviceId: string): Promise<boolean> {
+    const res = await this.fetchWithTimeout(`/devices/${encodeURIComponent(deviceId)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to remove device: ${res.status}`);
+    }
+    const data = await res.json();
+    return !!data.success;
+  }
+
+  async compareDevices(deviceAId: string, deviceBId: string): Promise<DeviceComparison> {
+    const res = await this.fetchWithTimeout(
+      `/devices/compare?a=${encodeURIComponent(deviceAId)}&b=${encodeURIComponent(deviceBId)}`
+    );
+    if (!res.ok) {
+      throw new Error(`Failed to compare devices: ${res.status}`);
     }
     return res.json();
   }

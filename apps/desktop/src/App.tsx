@@ -43,6 +43,10 @@ declare global {
       getTailscaleState: () => Promise<TailscaleState>;
       pingTailscalePeer: (ipOrHost: string) => Promise<{ success: boolean; latencyMs?: number; via?: string }>;
       getSyncthingState: () => Promise<SyncthingState>;
+      addDevice: (data: Partial<Device>) => Promise<Device>;
+      removeDevice: (id: string) => Promise<boolean>;
+      compareDevices: (aId: string, bId: string) => Promise<any>;
+      getOverallStats: () => Promise<any>;
     };
   }
 }
@@ -196,6 +200,46 @@ export const App: React.FC = () => {
     showNotification(`Scanning & synchronizing with ${device.deviceName}...`);
   };
 
+  const handleRemoveDevice = async (device: Device) => {
+    try {
+      if (window.hermesHub?.removeDevice) {
+        await window.hermesHub.removeDevice(device.deviceId);
+        const updated = await window.hermesHub.getDevices();
+        setDevices(updated);
+        if (window.hermesHub.getOverallStats) {
+          const newStats = await window.hermesHub.getOverallStats();
+          setStats(newStats);
+        }
+      } else {
+        setDevices(devices.filter((d) => d.deviceId !== device.deviceId));
+      }
+      setSelectedDeviceModal(null);
+      showNotification(`Device ${device.deviceName} removed from cluster registry ✓`);
+    } catch (err: any) {
+      showNotification(`Failed to remove device: ${err.message || 'Cannot remove device'}`);
+    }
+  };
+
+  const handleDeviceAdded = async (newDev: Device) => {
+    try {
+      if (window.hermesHub?.addDevice) {
+        await window.hermesHub.addDevice(newDev);
+        const updated = await window.hermesHub.getDevices();
+        setDevices(updated);
+        if (window.hermesHub.getOverallStats) {
+          const newStats = await window.hermesHub.getOverallStats();
+          setStats(newStats);
+        }
+      } else {
+        setDevices([...devices, newDev]);
+      }
+      setIsAddDeviceOpen(false);
+      showNotification(`Device ${newDev.deviceName} added to cluster mesh ✓`);
+    } catch (err: any) {
+      showNotification(`Failed to add device: ${err.message || 'Unknown error'}`);
+    }
+  };
+
   const handleDeviceAction = (action: string, device: Device) => {
     switch (action) {
       case 'create_backup':
@@ -218,6 +262,13 @@ export const App: React.FC = () => {
       case 'view_logs':
         setSelectedDeviceModal(null);
         setCurrentTab('activity');
+        break;
+      case 'remove_device':
+        handleRemoveDevice(device);
+        break;
+      case 'compare_device':
+        setSelectedDeviceModal(null);
+        setCurrentTab('devices');
         break;
       default:
         showNotification(`Executed action: ${action} on ${device.deviceName}`);
@@ -340,11 +391,7 @@ export const App: React.FC = () => {
       <AddDeviceModal
         isOpen={isAddDeviceOpen}
         onClose={() => setIsAddDeviceOpen(false)}
-        onDeviceAdded={(dev) => {
-          setDevices([...devices, dev]);
-          setIsAddDeviceOpen(false);
-          showNotification(`Device ${dev.deviceName} successfully paired!`);
-        }}
+        onDeviceAdded={handleDeviceAdded}
       />
 
       {/* Global Device Detail Modal (when selected) */}

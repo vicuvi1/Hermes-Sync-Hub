@@ -35,6 +35,12 @@ export const IPC_CHANNELS = {
 
   // Milestone 5 Syncthing Integration channels
   GET_SYNCTHING_STATE: 'hermes-hub:get-syncthing-state',
+
+  // Milestone 6 Device Management channels
+  ADD_DEVICE: 'hermes-hub:add-device',
+  REMOVE_DEVICE: 'hermes-hub:remove-device',
+  UPDATE_DEVICE: 'hermes-hub:update-device',
+  COMPARE_DEVICES: 'hermes-hub:compare-devices',
 } as const;
 
 export interface PairingCodePayload {
