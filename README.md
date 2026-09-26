@@ -185,6 +185,10 @@ The **Bots** tab discovers existing Hermes profiles and can create a new one by 
 
 The **Routing logic** tab supports editable and removable ordered rules by category and complexity range. The **History** tab keeps a local audit trail containing the route, model, profile, result, token information when Hermes reports it, and actual cost when available. Prompt previews and command output are redacted before persistence. Vault plaintext and provider keys are never added to the routing policy or history.
 
+Classification has two modes. **Deterministic** is the default: it is instant, bundled, reproducible, and spends no credits. **Local semantic** is opt-in and follows the open-source semantic-router pattern of comparing a prompt embedding with example utterances for each route. Hermes Hub uses [Transformers.js](https://github.com/huggingface/transformers.js) and the Apache-2.0 `Xenova/all-MiniLM-L6-v2` quantized ONNX model directly inside the privileged desktop process—no Python service, hosted embedding API, or provider request. Preparing it downloads roughly 24 MB once into application data. Low-confidence or unavailable semantic classification falls back to deterministic routing automatically.
+
+The design also borrows the weak/strong threshold and calibration principle from [RouteLLM](https://github.com/lm-sys/RouteLLM), while leaving Hermes' native provider fallback chain responsible for rate limits, outages, and credential rotation. This avoids embedding LiteLLM or another always-running proxy that would duplicate Hermes. Future threshold calibration will use the user's own local routing outcomes rather than spending credits on a separate classifier.
+
 This first version routes tasks started from the Hub. It does not intercept prompts typed directly into another Hermes window, and it does not automatically rerun failed tool-using tasks because repeating a mutating agent task could duplicate side effects. Hermes' native fallback configuration remains the right layer for provider availability and rate-limit recovery; the Hub router handles task complexity, policy, allowlisting, and budgets.
 
 ### Devices

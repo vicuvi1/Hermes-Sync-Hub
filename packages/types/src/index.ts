@@ -286,6 +286,7 @@ export interface HermesBoosterActionResult {
 
 export type RouterTaskCategory = 'general' | 'coding' | 'research' | 'writing' | 'analysis' | 'vision' | 'tool-use';
 export type RouterModelClass = 'free' | 'paid';
+export type RouterClassifierMode = 'deterministic' | 'local-semantic';
 
 export interface RouterModel {
   id: string;
@@ -329,6 +330,9 @@ export interface RouterBudgetPolicy {
 
 export interface RouterPolicy {
   version: 1;
+  classifierMode: RouterClassifierMode;
+  localSemanticModel: string;
+  semanticConfidenceThreshold: number;
   paidEscalationComplexity: number;
   models: RouterModel[];
   pools: RouterModelPool[];
@@ -410,6 +414,13 @@ export interface SmartRouterState {
   history: RouterExecutionRecord[];
   today: { spentUsd: number; paidRuns: number; totalRuns: number };
   catalog: { state: 'current' | 'stale' | 'offline'; checkedAt?: string; message: string };
+  classifier: {
+    state: 'disabled' | 'not-downloaded' | 'loading' | 'ready' | 'failed';
+    mode: RouterClassifierMode;
+    model: string;
+    cachePath: string;
+    message: string;
+  };
 }
 
 export interface HermesSkill {

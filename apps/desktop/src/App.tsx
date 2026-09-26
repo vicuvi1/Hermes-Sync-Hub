@@ -117,6 +117,7 @@ declare global {
       simulateSmartRoute: (input: RoutingSimulationInput) => Promise<RoutingDecision>;
       executeSmartRoute: (input: RouterExecutionInput) => Promise<RouterExecutionRecord>;
       refreshRouterCatalog: () => Promise<SmartRouterState>;
+      prepareLocalRouter: (confirmed: boolean) => Promise<SmartRouterState>;
       getTailscaleState: () => Promise<TailscaleState>;
       pingTailscalePeer: (ipOrHost: string) => Promise<{ success: boolean; latencyMs?: number; via?: string }>;
       getSyncthingState: () => Promise<SyncthingState>;

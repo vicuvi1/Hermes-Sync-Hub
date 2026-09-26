@@ -5,3 +5,8 @@ allowBuilds:
   electron: true
   electron-winstaller: true
   esbuild: true
+  # Required for the opt-in local text embedding runtime.
+  onnxruntime-node: true
+  # Hermes Hub does not use protobuf code generation or image transforms.
+  protobufjs: false
+  sharp: false

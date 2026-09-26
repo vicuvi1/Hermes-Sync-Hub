@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('hermesHub', {
   simulateSmartRoute: (input: RoutingSimulationInput) => ipcRenderer.invoke(IPC_CHANNELS.SIMULATE_SMART_ROUTE, input),
   executeSmartRoute: (input: RouterExecutionInput) => ipcRenderer.invoke(IPC_CHANNELS.EXECUTE_SMART_ROUTE, input),
   refreshRouterCatalog: () => ipcRenderer.invoke(IPC_CHANNELS.REFRESH_ROUTER_CATALOG),
+  prepareLocalRouter: (confirmed: boolean) => ipcRenderer.invoke(IPC_CHANNELS.PREPARE_LOCAL_ROUTER, confirmed),
   getTailscaleState: () => ipcRenderer.invoke(IPC_CHANNELS.GET_TAILSCALE_STATE),
   pingTailscalePeer: (ipOrHost: string) => ipcRenderer.invoke(IPC_CHANNELS.PING_TAILSCALE_PEER, ipOrHost),
   getSyncthingState: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SYNCTHING_STATE),

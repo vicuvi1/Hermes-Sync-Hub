@@ -2,6 +2,16 @@
 
 All notable changes are documented here. The project uses semantic version tags.
 
+## 0.7.1 — Optional zero-credit semantic routing
+
+- Added an opt-in local semantic classifier powered by the Apache-2.0 Transformers.js runtime and a quantized MiniLM embedding model.
+- Added explicit one-time model preparation, application-data caching, readiness/error states, and clear disk/network consent.
+- Kept deterministic classification as the default and automatic fallback when the local model is unavailable or below the configured confidence threshold.
+- Added an editable semantic confidence threshold and route explanations showing semantic confidence.
+- Added supply-chain policy allowing only the required ONNX runtime install script; optional image and protobuf build scripts remain disabled.
+- Verified real local inference produces finite 384-dimensional embeddings without provider requests or model-credit usage.
+- Expanded Smart Router coverage to seven focused tests and 163 total repository tests.
+
 ## 0.7.0 — Smart Model Router and native bot builder
 
 - Added a dedicated Smart Router workspace with overview, bot, model, pool, rule, simulator, and history tabs.

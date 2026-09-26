@@ -20,6 +20,7 @@ import { redactSecrets } from '@hermes-hub/shared';
 type CommandResult = { success: boolean; output: string };
 export type SmartRouterCommandRunner = (args: string[], timeout: number) => Promise<CommandResult>;
 export type RouterCatalogFetcher = () => Promise<Array<{ id: string; name: string; contextLength: number; promptUsdPerMillion: number; completionUsdPerMillion: number }>>;
+export type LocalSemanticClassifier = (prompt: string) => Promise<{ category: RouterTaskCategory; confidence: number }>;
 
 type StoredRouterData = {
   policy: RouterPolicy;
@@ -32,11 +33,23 @@ const now = () => new Date().toISOString();
 const MODEL_ID = /^[a-z0-9][a-z0-9._~:/-]{1,199}$/i;
 const PROFILE_ID = /^[a-z][a-z0-9-]{1,30}$/;
 const SAFE_SKILL = /^[a-z0-9][a-z0-9._-]{0,79}$/i;
+const LOCAL_SEMANTIC_MODEL = 'Xenova/all-MiniLM-L6-v2';
+const SEMANTIC_UTTERANCES: Record<Exclude<RouterTaskCategory, 'general'>, string[]> = {
+  coding: ['debug this program', 'implement a software feature', 'refactor the codebase', 'write automated tests', 'review an API implementation'],
+  research: ['research this topic with sources', 'compare evidence from several sources', 'investigate the market', 'find reliable references', 'prepare an evidence based report'],
+  writing: ['write a clear article', 'rewrite this document', 'draft a professional email', 'edit this README', 'improve the tone and structure'],
+  analysis: ['analyze the architecture', 'reason through this difficult decision', 'diagnose the root cause', 'create a strategy', 'evaluate risks and tradeoffs'],
+  vision: ['inspect this image', 'understand a screenshot', 'analyze this photograph', 'read a diagram', 'describe the visual layout'],
+  'tool-use': ['use tools to complete this task', 'operate an external application', 'call an API and process the result', 'run a multi step workflow', 'interact with connected services'],
+};
 
 function defaultPolicy(): RouterPolicy {
   const updatedAt = now();
   return {
     version: 1,
+    classifierMode: 'deterministic',
+    localSemanticModel: LOCAL_SEMANTIC_MODEL,
+    semanticConfidenceThreshold: 0.34,
     paidEscalationComplexity: 80,
     budget: { maxUsdPerTask: 0.25, maxUsdPerDay: 1, maxPaidRunsPerDay: 5, requireApprovalAboveUsd: 0.1 },
     models: [
@@ -90,23 +103,40 @@ function clamp(value: number, minimum: number, maximum: number): number {
 
 export class SmartRouterService {
   private readonly storageFile: string;
+  private readonly semanticCacheDirectory: string;
   private data: StoredRouterData;
+  private semanticPipeline?: (texts: string | string[], options: { pooling: 'mean'; normalize: true }) => Promise<{ tolist(): number[][] }>;
+  private semanticPrototypes?: Partial<Record<RouterTaskCategory, number[]>>;
+  private classifierState: SmartRouterState['classifier'];
 
   constructor(
     private readonly hermesService: HermesService,
     storageDirectory: string,
     private readonly injectedRunner?: SmartRouterCommandRunner,
     private readonly injectedCatalogFetcher?: RouterCatalogFetcher,
+    private readonly injectedSemanticClassifier?: LocalSemanticClassifier,
   ) {
     this.storageFile = path.join(storageDirectory, 'smart-router.json');
+    this.semanticCacheDirectory = path.join(storageDirectory, 'local-models');
     this.data = this.load();
+    this.classifierState = {
+      state: this.data.policy.classifierMode === 'local-semantic' ? 'not-downloaded' : 'disabled',
+      mode: this.data.policy.classifierMode,
+      model: this.data.policy.localSemanticModel,
+      cachePath: this.semanticCacheDirectory,
+      message: this.data.policy.classifierMode === 'local-semantic' ? 'Prepare the local semantic model once before using it.' : 'Deterministic zero-credit classification is active.',
+    };
   }
 
   private load(): StoredRouterData {
     try {
       if (fs.existsSync(this.storageFile)) {
         const parsed = JSON.parse(fs.readFileSync(this.storageFile, 'utf8')) as StoredRouterData;
-        if (parsed?.policy?.version === 1 && Array.isArray(parsed.bots) && Array.isArray(parsed.history)) return parsed;
+        if (parsed?.policy?.version === 1 && Array.isArray(parsed.bots) && Array.isArray(parsed.history)) {
+          const defaults = defaultPolicy();
+          parsed.policy = { ...defaults, ...parsed.policy, budget: { ...defaults.budget, ...parsed.policy.budget } };
+          return parsed;
+        }
       }
     } catch {}
     return { policy: defaultPolicy(), bots: [defaultBot()], history: [], catalog: { state: 'stale', message: 'Refresh the live model catalog before relying on pricing.' } };
@@ -174,6 +204,9 @@ export class SmartRouterService {
     });
     return {
       ...input, models, pools, rules,
+      classifierMode: input.classifierMode === 'local-semantic' ? 'local-semantic' : 'deterministic',
+      localSemanticModel: MODEL_ID.test(input.localSemanticModel || '') ? input.localSemanticModel : LOCAL_SEMANTIC_MODEL,
+      semanticConfidenceThreshold: clamp(Number(input.semanticConfidenceThreshold), 0.05, 0.95),
       paidEscalationComplexity: clamp(Number(input.paidEscalationComplexity), 0, 100),
       budget: {
         maxUsdPerTask: clamp(Number(input.budget?.maxUsdPerTask), 0, 10_000),
@@ -187,6 +220,13 @@ export class SmartRouterService {
 
   savePolicy(input: RouterPolicy): RouterPolicy {
     this.data.policy = this.validatePolicy(input);
+    this.classifierState = {
+      ...this.classifierState,
+      mode: this.data.policy.classifierMode,
+      model: this.data.policy.localSemanticModel,
+      state: this.data.policy.classifierMode === 'deterministic' ? 'disabled' : this.semanticPipeline || this.injectedSemanticClassifier ? 'ready' : 'not-downloaded',
+      message: this.data.policy.classifierMode === 'deterministic' ? 'Deterministic zero-credit classification is active.' : this.semanticPipeline || this.injectedSemanticClassifier ? 'Local semantic classification is ready.' : 'Prepare the local semantic model once before using it.',
+    };
     const poolIds = new Set(this.data.policy.pools.map((pool) => pool.id));
     this.data.bots = this.data.bots.map((bot) => poolIds.has(bot.defaultPoolId) ? bot : { ...bot, defaultPoolId: this.data.policy.pools[0].id, updatedAt: now() });
     this.save();
@@ -214,10 +254,10 @@ export class SmartRouterService {
       this.data.bots = this.data.bots.map((bot) => ({ ...bot, nativeProfileDetected: profiles.includes(bot.profile) || bot.profile === 'default' }));
       this.save();
     } catch {}
-    return { policy: this.data.policy, bots: this.data.bots, history: this.data.history.slice(0, 100), today: this.todayStats(), catalog: this.data.catalog };
+    return { policy: this.data.policy, bots: this.data.bots, history: this.data.history.slice(0, 100), today: this.todayStats(), catalog: this.data.catalog, classifier: this.classifierState };
   }
 
-  private classify(input: RoutingSimulationInput): { category: RouterTaskCategory; complexity: number; reasons: string[] } {
+  private classifyDeterministic(input: RoutingSimulationInput): { category: RouterTaskCategory; complexity: number; reasons: string[] } {
     const prompt = input.prompt.trim();
     if (!prompt || prompt.length > 20_000) throw new Error('Task text must contain between 1 and 20,000 characters.');
     const lower = prompt.toLowerCase();
@@ -248,8 +288,73 @@ export class SmartRouterService {
     return { category, complexity: Math.round(clamp(complexity, 0, 100)), reasons };
   }
 
-  simulate(input: RoutingSimulationInput): RoutingDecision {
-    const classified = this.classify(input);
+  private normalizedAverage(vectors: number[][]): number[] {
+    if (!vectors.length) return [];
+    const average = Array.from({ length: vectors[0].length }, (_, index) => vectors.reduce((sum, vector) => sum + (vector[index] || 0), 0) / vectors.length);
+    const norm = Math.sqrt(average.reduce((sum, value) => sum + value * value, 0)) || 1;
+    return average.map((value) => value / norm);
+  }
+
+  private async ensureLocalSemanticClassifier(allowDownload: boolean): Promise<void> {
+    if (this.injectedSemanticClassifier || (this.semanticPipeline && this.semanticPrototypes)) {
+      this.classifierState = { ...this.classifierState, state: 'ready', message: 'Local semantic classification is ready.' };
+      return;
+    }
+    this.classifierState = { ...this.classifierState, state: 'loading', message: allowDownload ? 'Downloading and preparing the local embedding model…' : 'Loading the cached local embedding model…' };
+    try {
+      fs.mkdirSync(this.semanticCacheDirectory, { recursive: true });
+      const transformers = await import('@huggingface/transformers');
+      transformers.env.cacheDir = this.semanticCacheDirectory;
+      transformers.env.allowRemoteModels = allowDownload;
+      const pipeline = await transformers.pipeline('feature-extraction', this.data.policy.localSemanticModel, {
+        cache_dir: this.semanticCacheDirectory,
+        local_files_only: !allowDownload,
+        dtype: 'q8',
+      });
+      this.semanticPipeline = pipeline as unknown as SmartRouterService['semanticPipeline'];
+      const prototypes: Partial<Record<RouterTaskCategory, number[]>> = {};
+      for (const [category, utterances] of Object.entries(SEMANTIC_UTTERANCES) as Array<[Exclude<RouterTaskCategory, 'general'>, string[]]>) {
+        const output = await this.semanticPipeline!(utterances, { pooling: 'mean', normalize: true });
+        prototypes[category] = this.normalizedAverage(output.tolist());
+      }
+      this.semanticPrototypes = prototypes;
+      this.classifierState = { ...this.classifierState, state: 'ready', message: 'Local semantic classification is ready. No API or model credits are used.' };
+    } catch (error) {
+      this.semanticPipeline = undefined;
+      this.semanticPrototypes = undefined;
+      this.classifierState = { ...this.classifierState, state: allowDownload ? 'failed' : 'not-downloaded', message: error instanceof Error ? error.message : 'The local semantic model could not be prepared.' };
+      throw error;
+    }
+  }
+
+  async prepareLocalClassifier(): Promise<SmartRouterState> {
+    await this.ensureLocalSemanticClassifier(true);
+    return this.getState();
+  }
+
+  private async classify(input: RoutingSimulationInput): Promise<{ category: RouterTaskCategory; complexity: number; reasons: string[] }> {
+    const deterministic = this.classifyDeterministic(input);
+    if (input.category || this.data.policy.classifierMode !== 'local-semantic') return deterministic;
+    try {
+      if (this.injectedSemanticClassifier) {
+        const semantic = await this.injectedSemanticClassifier(input.prompt);
+        if (semantic.confidence >= this.data.policy.semanticConfidenceThreshold) return { ...deterministic, category: semantic.category, reasons: [...deterministic.reasons, `Local semantic route: ${semantic.category} (${Math.round(semantic.confidence * 100)}%)`] };
+        return { ...deterministic, reasons: [...deterministic.reasons, `Local semantic confidence ${Math.round(semantic.confidence * 100)}% was below the threshold; deterministic category retained.`] };
+      }
+      await this.ensureLocalSemanticClassifier(false);
+      const output = await this.semanticPipeline!(input.prompt, { pooling: 'mean', normalize: true });
+      const vector = output.tolist()[0] || [];
+      const matches = Object.entries(this.semanticPrototypes || {}).map(([category, prototype]) => ({ category: category as RouterTaskCategory, confidence: (prototype || []).reduce((sum, value, index) => sum + value * (vector[index] || 0), 0) })).sort((a, b) => b.confidence - a.confidence);
+      const best = matches[0];
+      if (best && best.confidence >= this.data.policy.semanticConfidenceThreshold) return { ...deterministic, category: best.category, reasons: [...deterministic.reasons, `Local semantic route: ${best.category} (${Math.round(best.confidence * 100)}%)`] };
+      return { ...deterministic, reasons: [...deterministic.reasons, 'Local semantic confidence was low; deterministic category retained.'] };
+    } catch {
+      return { ...deterministic, reasons: [...deterministic.reasons, 'Local semantic classifier was unavailable; deterministic zero-credit fallback used.'] };
+    }
+  }
+
+  async simulate(input: RoutingSimulationInput): Promise<RoutingDecision> {
+    const classified = await this.classify(input);
     const bot = this.data.bots.find((item) => item.id === (input.botId || 'default') && item.enabled) || this.data.bots.find((item) => item.id === 'default') || this.data.bots[0];
     const rules = [...this.data.policy.rules].filter((rule) => rule.enabled).sort((a, b) => a.priority - b.priority);
     const rule = rules.find((item) => classified.complexity >= item.minimumComplexity && classified.complexity <= item.maximumComplexity && (!item.categories.length || item.categories.includes(classified.category)));
@@ -337,7 +442,7 @@ export class SmartRouterService {
 
   async execute(input: RouterExecutionInput): Promise<RouterExecutionRecord> {
     if (input.confirmed !== true) throw new Error('Running a routed Hermes task requires explicit confirmation.');
-    const decision = this.simulate(input);
+    const decision = await this.simulate(input);
     const bot = this.data.bots.find((item) => item.id === decision.botId);
     if (!bot || !bot.nativeProfileDetected) throw new Error('The selected Hermes bot profile is unavailable.');
     if (decision.blocked || !decision.selectedModel) throw new Error(decision.message);

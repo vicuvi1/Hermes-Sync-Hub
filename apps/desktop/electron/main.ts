@@ -542,6 +542,12 @@ ipcMain.handle(IPC_CHANNELS.EXECUTE_SMART_ROUTE, async (_event, input: unknown) 
   return record;
 });
 ipcMain.handle(IPC_CHANNELS.REFRESH_ROUTER_CATALOG, async () => smartRouterService.refreshCatalog());
+ipcMain.handle(IPC_CHANNELS.PREPARE_LOCAL_ROUTER, async (_event, confirmed: unknown) => {
+  if (confirmed !== true) throw new Error('Downloading the open-source local embedding model requires explicit confirmation.');
+  const state = await smartRouterService.prepareLocalClassifier();
+  activityService.record({ type: 'settings_changed', title: 'Local semantic router prepared', description: `${state.classifier.model} is cached locally and ready without API credits.`, sourceDevice: deviceIdentity.getLocalDevice().deviceName, status: 'success' });
+  return state;
+});
 
 ipcMain.handle(IPC_CHANNELS.GET_TAILSCALE_STATE, async () => {
   return tailscaleAdapter.getState();

@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SmartRouterService, type SmartRouterCommandRunner } from '../apps/desktop/electron/smartRouter';
+import { SmartRouterService, type LocalSemanticClassifier, type SmartRouterCommandRunner } from '../apps/desktop/electron/smartRouter';
 
 const directories: string[] = [];
 
-function createService(commands: string[][] = [], runnerOverride?: SmartRouterCommandRunner) {
+function createService(commands: string[][] = [], runnerOverride?: SmartRouterCommandRunner, semanticClassifier?: LocalSemanticClassifier) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-router-'));
   directories.push(directory);
   const runner: SmartRouterCommandRunner = runnerOverride || (async (args) => {
@@ -17,7 +17,7 @@ function createService(commands: string[][] = [], runnerOverride?: SmartRouterCo
     return { success: true, output: 'ok' };
   });
   const hermes = { detect: async () => ({ executablePath: process.execPath }) };
-  return new SmartRouterService(hermes as never, directory, runner, async () => []);
+  return new SmartRouterService(hermes as never, directory, runner, async () => [], semanticClassifier);
 }
 
 afterEach(() => {
@@ -25,9 +25,9 @@ afterEach(() => {
 });
 
 describe('SmartRouterService', () => {
-  it('routes ordinary work to a free model', () => {
+  it('routes ordinary work to a free model', async () => {
     const service = createService();
-    const decision = service.simulate({ prompt: 'Summarize this short note.', botId: 'default' });
+    const decision = await service.simulate({ prompt: 'Summarize this short note.', botId: 'default' });
     expect(decision.blocked).toBe(false);
     expect(decision.paid).toBe(false);
     expect(decision.selectedPoolId).toBe('free-fast');
@@ -35,9 +35,9 @@ describe('SmartRouterService', () => {
     expect(decision.estimatedCostUsd).toBe(0);
   });
 
-  it('uses only the approved paid allowlist for highly complex work', () => {
+  it('uses only the approved paid allowlist for highly complex work', async () => {
     const service = createService();
-    const decision = service.simulate({
+    const decision = await service.simulate({
       prompt: `Design a production distributed architecture and implement a multi-step migration. ${'architecture '.repeat(400)}`,
       botId: 'default',
       fileCount: 20,
@@ -59,7 +59,7 @@ describe('SmartRouterService', () => {
       ...state.policy,
       models: state.policy.models.map((model) => ({ ...model, approvedForPaidUse: false })),
     });
-    const decision = service.simulate({ prompt: `Implement a production distributed architecture. ${'complex '.repeat(700)}`, fileCount: 20, estimatedContextTokens: 200_000, requiresTools: true });
+    const decision = await service.simulate({ prompt: `Implement a production distributed architecture. ${'complex '.repeat(700)}`, fileCount: 20, estimatedContextTokens: 200_000, requiresTools: true });
     expect(decision.blocked).toBe(true);
     expect(decision.selectedModel).toBeUndefined();
   });
@@ -68,7 +68,7 @@ describe('SmartRouterService', () => {
     const service = createService();
     const state = await service.getState();
     service.savePolicy({ ...state.policy, budget: { ...state.policy.budget, maxUsdPerTask: 0 } });
-    const decision = service.simulate({ prompt: `Implement a production distributed architecture. ${'complex '.repeat(700)}`, fileCount: 20, estimatedContextTokens: 200_000, requiresTools: true });
+    const decision = await service.simulate({ prompt: `Implement a production distributed architecture. ${'complex '.repeat(700)}`, fileCount: 20, estimatedContextTokens: 200_000, requiresTools: true });
     expect(decision.paid).toBe(true);
     expect(decision.blocked).toBe(true);
     expect(decision.message).toContain('budget');
@@ -92,5 +92,17 @@ describe('SmartRouterService', () => {
     expect(record.status).toBe('success');
     const command = commands.find((args) => args.includes('-z'));
     expect(command).toEqual(expect.arrayContaining(['-p', 'default', '-z', 'Summarize this note.', '-m', 'nvidia/nemotron-3.5-lightning:free', '--provider', 'openrouter']));
+  });
+
+  it('uses an opt-in local semantic classifier without provider calls and keeps deterministic scoring', async () => {
+    const service = createService([], undefined, async () => ({ category: 'research', confidence: 0.91 }));
+    const state = await service.getState();
+    service.savePolicy({ ...state.policy, classifierMode: 'local-semantic', semanticConfidenceThreshold: 0.5 });
+    const prepared = await service.prepareLocalClassifier();
+    const decision = await service.simulate({ prompt: 'Examine the available material and give me a useful answer.' });
+    expect(prepared.classifier.state).toBe('ready');
+    expect(decision.category).toBe('research');
+    expect(decision.reasons.some((reason) => reason.includes('Local semantic route'))).toBe(true);
+    expect(decision.selectedModel?.class).toBe('free');
   });
 });
