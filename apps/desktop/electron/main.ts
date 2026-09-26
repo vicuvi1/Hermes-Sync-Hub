@@ -1,12 +1,11 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, safeStorage, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
-import { Device, OverallStats } from '@hermes-hub/types';
-import { MOCK_DEVICES, MOCK_OVERALL_STATS, redactSecrets } from '@hermes-hub/shared';
+import { CompleteOnboardingInput, Device, OverallStats, RuntimeHealth, VaultSecret } from '@hermes-hub/types';
+import { redactSecrets } from '@hermes-hub/shared';
 import {
   DeviceIdentityService,
   DeviceRegistryService,
@@ -22,21 +21,22 @@ import {
   BackupService,
   RevisionService,
   DiagnosticsService,
+  VaultService,
 } from '@hermes-hub/agent';
 import { SettingsManager } from './settings.js';
 import { setupTray, destroyTray } from './tray.js';
 import { sendDesktopNotification } from './notifications.js';
+import { UpdateManager } from './updater.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const execFileAsync = promisify(execFile);
-
 let mainWindow: BrowserWindow | null = null;
 const settingsManager = new SettingsManager();
+const configuredSettings = settingsManager.getSettings();
 const deviceIdentity = new DeviceIdentityService();
-const deviceRegistry = new DeviceRegistryService(deviceIdentity);
+const deviceRegistry = new DeviceRegistryService(deviceIdentity, undefined, false);
 const healthMonitor = new HealthMonitorService(deviceIdentity);
-const hermesService = new HermesService();
+const hermesService = new HermesService(configuredSettings.hermesHome);
 const tailscaleAdapter = new TailscaleAdapter();
 const syncthingAdapter = new SyncthingAdapter();
 const pairingService = new PairingService(
@@ -46,7 +46,7 @@ const pairingService = new PairingService(
   syncthingAdapter,
   hermesService
 );
-const workspaceService = new WorkspaceService(deviceIdentity, hermesService);
+const workspaceService = new WorkspaceService(deviceIdentity, hermesService, configuredSettings.workspacePath);
 const syncEngine = new SyncEngineService(
   workspaceService,
   hermesService,
@@ -81,6 +81,77 @@ const agentServer = new AgentServer(
   revisionService,
   diagnosticsService
 );
+let updateManager: UpdateManager | null = null;
+let vaultService: VaultService | null = null;
+
+function appendCrashLog(kind: string, error: unknown): void {
+  try {
+    const logDirectory = path.join(app.getPath('userData'), 'logs');
+    fs.mkdirSync(logDirectory, { recursive: true });
+    const detail = error instanceof Error ? error.stack || error.message : String(error);
+    fs.appendFileSync(path.join(logDirectory, 'main-process.log'), `[${new Date().toISOString()}] ${kind}\n${redactSecrets(detail)}\n\n`);
+  } catch {}
+}
+
+process.on('uncaughtException', (error) => appendCrashLog('uncaughtException', error));
+process.on('unhandledRejection', (error) => appendCrashLog('unhandledRejection', error));
+
+function getVaultService(): VaultService {
+  if (vaultService) return vaultService;
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows secure storage is unavailable');
+  const vaultDirectory = path.join(app.getPath('userData'), 'vault');
+  const keyPath = path.join(vaultDirectory, 'master-key.bin');
+  fs.mkdirSync(vaultDirectory, { recursive: true });
+  let masterKey: Buffer;
+  if (fs.existsSync(keyPath)) {
+    masterKey = Buffer.from(safeStorage.decryptString(fs.readFileSync(keyPath)), 'base64');
+  } else {
+    masterKey = crypto.randomBytes(32);
+    fs.writeFileSync(keyPath, safeStorage.encryptString(masterKey.toString('base64')));
+  }
+  vaultService = new VaultService(path.join(vaultDirectory, 'secrets.vault.enc'), masterKey);
+  return vaultService;
+}
+
+async function getRuntimeHealth(): Promise<RuntimeHealth> {
+  const [agentResult, hermesResult, tailscaleResult, syncthingResult, workspaceResult, syncResult] = await Promise.allSettled([
+    healthMonitor.getHealthSnapshot(),
+    hermesService.getStatus(),
+    tailscaleAdapter.getState(),
+    syncthingAdapter.getState(),
+    workspaceService.getWorkspaceStatus(),
+    syncEngine.getSyncSummary(),
+  ]);
+  const hermes = hermesResult.status === 'fulfilled' ? hermesResult.value : null;
+  const tailscale = tailscaleResult.status === 'fulfilled' ? tailscaleResult.value : null;
+  const syncthing = syncthingResult.status === 'fulfilled' ? syncthingResult.value : null;
+  const workspace = workspaceResult.status === 'fulfilled' ? workspaceResult.value : null;
+  const services: RuntimeHealth['services'] = {
+    agent: agentResult.status === 'fulfilled'
+      ? { state: 'healthy', label: 'Local agent', detail: 'Background services are responding.', required: true }
+      : { state: 'error', label: 'Local agent', detail: 'The local agent did not respond.', required: true },
+    hermes: hermes?.isInstalled
+      ? { state: hermes.isRunning ? 'healthy' : 'offline', label: 'Hermes Agent', detail: hermes.isRunning ? `Running ${hermes.version}` : 'Installed but not currently running.', required: true }
+      : { state: 'unavailable', label: 'Hermes Agent', detail: 'Hermes Agent was not detected.', required: true },
+    tailscale: tailscale?.installed
+      ? { state: tailscale.connected ? 'healthy' : 'offline', label: 'Tailscale', detail: tailscale.connected ? `${tailscale.peers.length} peer(s) visible.` : 'Installed but disconnected.', required: false }
+      : { state: 'unavailable', label: 'Tailscale', detail: 'Tailscale is not installed.', required: false },
+    syncthing: syncthing?.installed
+      ? { state: syncthing.running ? 'healthy' : 'offline', label: 'Syncthing', detail: syncthing.running ? `${syncthing.folders.length} folder(s) configured.` : 'Installed but not running.', required: false }
+      : { state: 'unavailable', label: 'Syncthing', detail: 'Syncthing is not installed.', required: false },
+    workspace: workspace?.isInitialized
+      ? { state: 'healthy', label: 'Workspace', detail: `${workspace.totalFiles} tracked file(s).`, required: true }
+      : { state: 'misconfigured', label: 'Workspace', detail: 'The managed workspace has not been initialized.', required: true },
+  };
+  const requiredReady = Object.values(services).filter((service) => service.required).every((service) => service.state === 'healthy');
+  const hasHealthyCore = services.agent.state === 'healthy' && (services.hermes.state === 'healthy' || configuredSettings.demoMode);
+  return {
+    checkedAt: new Date().toISOString(),
+    overall: requiredReady ? 'ready' : hasHealthyCore ? 'attention' : 'setup-required',
+    services,
+    lastSuccessfulSync: syncResult.status === 'fulfilled' ? syncResult.value.lastSync : undefined,
+  };
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -334,6 +405,16 @@ ipcMain.handle(IPC_CHANNELS.GET_SESSIONS, async (_event, options?: any) => {
   return sessionService.listSessions(options || {});
 });
 
+ipcMain.handle(IPC_CHANNELS.GET_MEMORIES, async () => hermesService.getMemories());
+ipcMain.handle(IPC_CHANNELS.GET_SKILLS, async () => hermesService.getSkills());
+ipcMain.handle(IPC_CHANNELS.GET_FILES, async () => hermesService.getConfigFiles());
+ipcMain.handle(IPC_CHANNELS.GET_ACTIVITY, async () => []);
+
+ipcMain.handle(IPC_CHANNELS.GET_VAULT_SECRETS, async () => getVaultService().listSecrets());
+ipcMain.handle(IPC_CHANNELS.GET_VAULT_SECRET, async (_event, id: string) => getVaultService().getSecret(id));
+ipcMain.handle(IPC_CHANNELS.SAVE_VAULT_SECRET, async (_event, secret: VaultSecret) => getVaultService().saveSecret(secret));
+ipcMain.handle(IPC_CHANNELS.DELETE_VAULT_SECRET, async (_event, id: string) => getVaultService().deleteSecret(id));
+
 ipcMain.handle(IPC_CHANNELS.GET_SESSION_DETAIL, async (_event, sessionId: string) => {
   return sessionService.getSessionDetail(sessionId);
 });
@@ -397,82 +478,35 @@ ipcMain.handle(IPC_CHANNELS.GET_DIAGNOSTICS_REPORT, async () => {
   return diagnosticsService.generateDiagnosticsReport();
 });
 
-ipcMain.handle(IPC_CHANNELS.GITHUB_UPDATE, async () => {
-  const repositoryRoot = path.resolve(__dirname, '../../..');
-  const runGit = async (args: string[]) => {
-    const result = await execFileAsync('git', args, {
-      cwd: repositoryRoot,
-      timeout: 120_000,
-      maxBuffer: 10 * 1024 * 1024,
-    });
-    return result.stdout.trim();
+ipcMain.handle(IPC_CHANNELS.GET_APP_VERSION, async () => app.getVersion());
+ipcMain.handle(IPC_CHANNELS.CHECK_FOR_UPDATES, async () => updateManager?.check());
+ipcMain.handle(IPC_CHANNELS.DOWNLOAD_AND_INSTALL_UPDATE, async () => updateManager?.downloadAndInstall());
+ipcMain.handle(IPC_CHANNELS.GITHUB_UPDATE, async () => updateManager?.downloadAndInstall());
+ipcMain.handle(IPC_CHANNELS.GET_RUNTIME_HEALTH, async () => getRuntimeHealth());
+ipcMain.handle(IPC_CHANNELS.GET_ONBOARDING_STATE, async () => {
+  const settings = settingsManager.getSettings();
+  const detected = await hermesService.detect();
+  return {
+    completed: settings.onboardingCompleted,
+    detectedHermesHome: detected?.homePath,
+    configuredHermesHome: settings.hermesHome,
+    workspacePath: settings.workspacePath || workspaceService.getRootPath(),
+    runtime: await getRuntimeHealth(),
   };
-
-  try {
-    const dirtyFiles = await runGit(['status', '--porcelain']);
-    if (dirtyFiles) {
-      return {
-        success: false,
-        status: 'blocked',
-        message: 'Update paused because this installation has local changes. Commit or discard them first.',
-      };
-    }
-
-    const previousCommit = await runGit(['rev-parse', '--short', 'HEAD']);
-    await runGit(['-c', 'http.sslBackend=openssl', 'fetch', 'origin', 'main']);
-    const localCommit = await runGit(['rev-parse', 'HEAD']);
-    const remoteCommit = await runGit(['rev-parse', 'origin/main']);
-
-    if (localCommit === remoteCommit) {
-      return {
-        success: true,
-        status: 'up-to-date',
-        message: `Hermes Hub is already up to date (${previousCommit}).`,
-        previousCommit,
-        currentCommit: previousCommit,
-      };
-    }
-
-    const commonAncestor = await runGit(['merge-base', localCommit, remoteCommit]);
-    if (commonAncestor !== localCommit) {
-      return {
-        success: false,
-        status: 'blocked',
-        message: 'The local branch has diverged from GitHub. Update safely from Git before using one-click updates.',
-        previousCommit,
-      };
-    }
-
-    await runGit(['-c', 'http.sslBackend=openssl', 'pull', '--ff-only', 'origin', 'main']);
-    const commandShell = process.env.ComSpec || 'cmd.exe';
-    await execFileAsync(commandShell, ['/d', '/s', '/c', 'pnpm install --frozen-lockfile && pnpm build'], {
-      cwd: repositoryRoot,
-      timeout: 10 * 60_000,
-      maxBuffer: 20 * 1024 * 1024,
-    });
-    const currentCommit = await runGit(['rev-parse', '--short', 'HEAD']);
-
-    setTimeout(() => {
-      app.relaunch();
-      app.exit(0);
-    }, 1500);
-
-    return {
-      success: true,
-      status: 'updated',
-      message: `Updated from ${previousCommit} to ${currentCommit}. Restarting Hermes Hub…`,
-      previousCommit,
-      currentCommit,
-      restartScheduled: true,
-    };
-  } catch (error: any) {
-    const detail = error?.stderr?.trim() || error?.message || 'Unknown update error';
-    return {
-      success: false,
-      status: 'failed',
-      message: `GitHub update failed: ${detail}`,
-    };
-  }
+});
+ipcMain.handle(IPC_CHANNELS.COMPLETE_ONBOARDING, async (_event, input: CompleteOnboardingInput) => {
+  const settings = settingsManager.updateSettings({
+    onboardingCompleted: true,
+    demoMode: input.demoMode,
+    hermesHome: input.hermesHome || undefined,
+    workspacePath: input.workspacePath || undefined,
+  });
+  if (!input.demoMode && !input.workspacePath) await workspaceService.initWorkspace();
+  setTimeout(() => {
+    app.relaunch();
+    app.exit(0);
+  }, 500);
+  return settings;
 });
 
 ipcMain.handle(IPC_CHANNELS.EXPORT_DIAGNOSTICS, async (_event, outputPath?: string) => {
@@ -490,10 +524,22 @@ ipcMain.handle(IPC_CHANNELS.OPEN_FOLDER, async (_event, folderPath: string) => {
   return true;
 });
 
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) app.quit();
+
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
 app.whenReady().then(() => {
   // Create the desktop window first. Network or integration startup must never
   // prevent the control center from becoming visible.
   createWindow();
+  updateManager = new UpdateManager(() => mainWindow);
 
   agentServer.start()
     .then((port) => console.log(`[AgentServer] Loopback HTTP server running on 127.0.0.1:${port}`))
@@ -510,6 +556,10 @@ app.whenReady().then(() => {
         sendDesktopNotification('Backup Created', `Snapshot archive ${b.name} created successfully.`);
       },
     });
+  }
+
+  if (settingsManager.getSettings().autoCheckUpdates) {
+    setTimeout(() => updateManager?.check(), 5000);
   }
 
   app.on('activate', () => {

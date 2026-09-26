@@ -9,6 +9,7 @@ import {
   SyncthingFolder,
 } from '@hermes-hub/types';
 import { formatBytes } from '@hermes-hub/shared';
+import { UpdateSettingsSection } from './UpdateSettingsSection';
 import {
   Settings,
   Wifi,
@@ -36,8 +37,6 @@ import {
   ArrowDown,
   ArrowUp,
   HardDrive,
-  Github,
-  LoaderCircle,
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -216,10 +215,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [startAgentAuto, setStartAgentAuto] = useState(true);
   const [closeToTray, setCloseToTray] = useState(true);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [demoMode, setDemoMode] = useState(false);
   const [diagnosticsExported, setDiagnosticsExported] = useState(false);
   const [diagnosticsPath, setDiagnosticsPath] = useState<string | null>(null);
-  const [updateState, setUpdateState] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
-  const [updateMessage, setUpdateMessage] = useState('Pull the latest version from origin/main, rebuild, and restart automatically.');
   const [pingLatency, setPingLatency] = useState<number | null>(null);
   const [isPinging, setIsPinging] = useState(false);
 
@@ -232,6 +230,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             setStartWithWindows(s.launchOnStartup);
             setCloseToTray(s.closeToTray);
             setNotificationsEnabled(s.notificationsEnabled);
+            setDemoMode(s.demoMode);
           }
         } catch {}
       }
@@ -246,22 +245,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     Record<string, { latencyMs?: number; via?: string; error?: boolean }>
   >({});
   const [isRefreshingTs, setIsRefreshingTs] = useState(false);
-  const [showSimulatedMesh, setShowSimulatedMesh] = useState(false);
-
-  const effectiveTsState: TailscaleState =
-    tailscaleState && (tailscaleState.installed || !showSimulatedMesh)
-      ? tailscaleState
-      : SIMULATED_TAILSCALE;
+  const effectiveTsState: TailscaleState = tailscaleState || {
+    installed: false, connected: false, backendState: 'NotInstalled', peers: [], directPeersCount: 0, relayedPeersCount: 0,
+  };
 
   // Milestone 5: Syncthing state & transfer inspection
   const [copiedSyncId, setCopiedSyncId] = useState(false);
   const [isRefreshingSync, setIsRefreshingSync] = useState(false);
-  const [showSimulatedSync, setShowSimulatedSync] = useState(false);
-
-  const effectiveSyncState: SyncthingState =
-    syncthingState && (syncthingState.installed || !showSimulatedSync)
-      ? syncthingState
-      : SIMULATED_SYNCTHING;
+  const effectiveSyncState: SyncthingState = syncthingState || {
+    installed: false, running: false, apiUrl: '', devices: [], folders: [],
+    connectionState: { totalConnections: 0, activeConnections: 0, connections: {} },
+    transferState: { inRateBytesPerSec: 0, outRateBytesPerSec: 0, totalNeedBytes: 0, totalGlobalBytes: 0, completionPercentage: 0, isSyncing: false, activeTransfers: [] },
+  };
 
   const handleExport = async () => {
     if (window.hermesHub?.exportDiagnostics) {
@@ -277,23 +272,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setTimeout(() => setDiagnosticsExported(false), 4000);
   };
 
-  const handleGithubUpdate = async () => {
-    if (!window.hermesHub?.githubUpdate) {
-      setUpdateState('error');
-      setUpdateMessage('GitHub updates are unavailable in this build.');
-      return;
-    }
-    setUpdateState('checking');
-    setUpdateMessage('Checking GitHub and preparing the latest version…');
-    try {
-      const result = await window.hermesHub.githubUpdate();
-      setUpdateState(result.success ? 'success' : 'error');
-      setUpdateMessage(result.message);
-    } catch (error: any) {
-      setUpdateState('error');
-      setUpdateMessage(`GitHub update failed: ${error?.message || 'Unknown error'}`);
-    }
-  };
 
   const handleToggleStartup = async (val: boolean) => {
     setStartWithWindows(val);
@@ -320,6 +298,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         'Hermes Hub mesh alerts and backup confirmations are enabled.'
       );
     }
+  };
+
+  const handleToggleDemoMode = async (val: boolean) => {
+    setDemoMode(val);
+    if (window.hermesHub?.updateAppSettings) await window.hermesHub.updateAppSettings({ demoMode: val });
+    window.location.reload();
   };
 
   const handlePing = async () => {
@@ -469,7 +453,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="p-3 rounded-xl bg-muted/20 border border-border/30 text-xs font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <span className="text-muted-foreground">Persistent Device UUID:</span>
             <span className="text-foreground truncate select-all">
-              {agentHealth?.deviceId || '6f63a928-8422-4fe1-9e20-9118e902b801'}
+              {agentHealth?.deviceId || 'Unavailable'}
             </span>
           </div>
         </div>
@@ -483,14 +467,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <span>P2P Network & Transport (Tailscale Mesh)</span>
           </h3>
           <div className="flex items-center gap-2">
-            {!effectiveTsState.installed && (
-              <button
-                onClick={() => setShowSimulatedMesh(!showSimulatedMesh)}
-                className="text-[11px] px-2.5 py-1 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {showSimulatedMesh ? 'Show Host State' : 'Preview Mesh Network'}
-              </button>
-            )}
             <button
               onClick={handleRefreshTs}
               disabled={isRefreshingTs}
@@ -706,14 +682,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              {!effectiveSyncState.installed && (
-                <button
-                  onClick={() => setShowSimulatedSync(!showSimulatedSync)}
-                  className="text-[11px] px-2.5 py-1 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showSimulatedSync ? 'Show Host State' : 'Preview Syncthing Mesh'}
-                </button>
-              )}
               <button
                 onClick={handleRefreshSync}
                 disabled={isRefreshingSync}
@@ -1042,42 +1010,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               />
             </button>
           </div>
-        </div>
-      </div>
 
-      {/* GitHub updater */}
-      <div className="space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Application Updates
-        </h3>
-        <div className="rounded-xl border border-border bg-card/70 p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="rounded-xl border border-border bg-background p-2.5 text-foreground">
-                <Github className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-foreground">GitHub Update</div>
-                <div className={`mt-1 max-w-2xl text-xs ${updateState === 'error' ? 'text-rose-500' : updateState === 'success' ? 'text-emerald-500' : 'text-muted-foreground'}`}>
-                  {updateMessage}
-                </div>
-                <div className="mt-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <Shield className="h-3 w-3 text-emerald-500" />
-                  Fast-forward only · protects local changes
-                </div>
-              </div>
+          <div className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold text-foreground">Demo Mode</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Use clearly labeled sample content instead of local Hermes data</div>
             </div>
-            <button
-              onClick={handleGithubUpdate}
-              disabled={updateState === 'checking'}
-              className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
-            >
-              {updateState === 'checking' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Github className="h-4 w-4" />}
-              <span>{updateState === 'checking' ? 'Updating…' : 'GitHub Update'}</span>
+            <button onClick={() => handleToggleDemoMode(!demoMode)} className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${demoMode ? 'bg-violet-500' : 'bg-muted'}`} aria-pressed={demoMode}>
+              <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${demoMode ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
           </div>
         </div>
       </div>
+
+      {/* GitHub updater */}
+      <UpdateSettingsSection />
 
       {/* Diagnostics & Logs */}
       <div className="space-y-3">

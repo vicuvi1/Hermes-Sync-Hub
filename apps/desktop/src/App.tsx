@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar, NavTab } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { CommandPalette } from './components/layout/CommandPalette';
+import { RuntimeStatusBar } from './components/layout/RuntimeStatusBar';
+import { FirstRunWizard } from './components/onboarding/FirstRunWizard';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { DevicesView } from './components/devices/DevicesView';
 import { SessionsView } from './components/sessions/SessionsView';
@@ -26,8 +28,26 @@ import {
   MOCK_ACTIVITY,
   MOCK_BACKUPS,
 } from '@hermes-hub/shared';
-import { Device, VaultSecret, BackupRecord, TailscaleState, SyncthingState } from '@hermes-hub/types';
-import { AgentHealthResponse, GithubUpdateResult } from '@hermes-hub/protocol';
+import {
+  ActivityEvent,
+  ActiveTransfer,
+  AppSettings,
+  AppUpdateProgress,
+  BackupRecord,
+  CompleteOnboardingInput,
+  Device,
+  HermesFile,
+  HermesMemory,
+  HermesSession,
+  HermesSkill,
+  OnboardingState,
+  OverallStats,
+  RuntimeHealth,
+  SyncthingState,
+  TailscaleState,
+  VaultSecret,
+} from '@hermes-hub/types';
+import { AgentHealthResponse } from '@hermes-hub/protocol';
 
 declare global {
   interface Window {
@@ -64,6 +84,10 @@ declare global {
       getSyncConflicts: () => Promise<any>;
       resolveSyncConflict: (conflictId: string, resolution: any) => Promise<any>;
       getSessions: (options?: any) => Promise<any[]>;
+      getMemories: () => Promise<HermesMemory[]>;
+      getSkills: () => Promise<HermesSkill[]>;
+      getFiles: () => Promise<HermesFile[]>;
+      getActivity: () => Promise<ActivityEvent[]>;
       getSessionDetail: (sessionId: string) => Promise<any>;
       exportSession: (options: any) => Promise<any>;
       importSession: (payload: any) => Promise<any>;
@@ -78,23 +102,34 @@ declare global {
       updateAppSettings: (updates: any) => Promise<any>;
       showNotification: (title: string, body: string) => Promise<boolean>;
       getDiagnosticsReport: () => Promise<any>;
-      githubUpdate: () => Promise<GithubUpdateResult>;
+      getVaultSecrets: () => Promise<VaultSecret[]>;
+      getVaultSecret: (id: string) => Promise<VaultSecret | null>;
+      saveVaultSecret: (secret: VaultSecret) => Promise<VaultSecret>;
+      deleteVaultSecret: (id: string) => Promise<boolean>;
+      getRuntimeHealth: () => Promise<RuntimeHealth>;
+      getOnboardingState: () => Promise<OnboardingState>;
+      completeOnboarding: (input: CompleteOnboardingInput) => Promise<AppSettings>;
+      getAppVersion: () => Promise<string>;
+      checkForUpdates: () => Promise<AppUpdateProgress>;
+      downloadAndInstallUpdate: () => Promise<AppUpdateProgress>;
+      githubUpdate: () => Promise<AppUpdateProgress>;
+      onUpdateStatus: (callback: (status: AppUpdateProgress) => void) => () => void;
     };
   }
 }
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavTab>('dashboard');
-  const [devices, setDevices] = useState<Device[]>(MOCK_DEVICES);
-  const [stats, setStats] = useState(MOCK_OVERALL_STATS);
-  const [activeTransfer, setActiveTransfer] = useState(MOCK_ACTIVE_TRANSFER);
-  const [sessions, setSessions] = useState(MOCK_SESSIONS);
-  const [memories, setMemories] = useState(MOCK_MEMORIES);
-  const [skills, setSkills] = useState(MOCK_SKILLS);
-  const [files, setFiles] = useState(MOCK_FILES);
-  const [vaultSecrets, setVaultSecrets] = useState(MOCK_VAULT_SECRETS);
-  const [activity, setActivity] = useState(MOCK_ACTIVITY);
-  const [backups, setBackups] = useState<BackupRecord[]>(MOCK_BACKUPS);
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [stats, setStats] = useState<OverallStats>({ devicesCount: 0, onlineCount: 0, sessionsCount: 0, memoriesCount: 0, skillsCount: 0, pendingFilesCount: 0, conflictsCount: 0, syncHealth: 'offline_changes' });
+  const [activeTransfer, setActiveTransfer] = useState<ActiveTransfer | null>(null);
+  const [sessions, setSessions] = useState<HermesSession[]>([]);
+  const [memories, setMemories] = useState<HermesMemory[]>([]);
+  const [skills, setSkills] = useState<HermesSkill[]>([]);
+  const [files, setFiles] = useState<HermesFile[]>([]);
+  const [vaultSecrets, setVaultSecrets] = useState<VaultSecret[]>([]);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
+  const [backups, setBackups] = useState<BackupRecord[]>([]);
 
   const [agentHealth, setAgentHealth] = useState<AgentHealthResponse | null>(null);
   const [tailscaleState, setTailscaleState] = useState<TailscaleState | null>(null);
@@ -105,6 +140,12 @@ export const App: React.FC = () => {
   const [notification, setNotification] = useState<string | null>(null);
   const [isNavigationOpen, setIsNavigationOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
+  const [runtimeHealth, setRuntimeHealth] = useState<RuntimeHealth | null>(null);
+  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<AppUpdateProgress | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -147,42 +188,56 @@ export const App: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    async function initLocalAgent() {
-      if (window.hermesHub) {
-        try {
-          const [loadedDevices, health, ts, sync, loadedSessions] = await Promise.all([
-            window.hermesHub.getDevices(),
-            window.hermesHub.getAgentHealth(),
-            window.hermesHub.getTailscaleState ? window.hermesHub.getTailscaleState() : Promise.resolve(null),
-            window.hermesHub.getSyncthingState ? window.hermesHub.getSyncthingState() : Promise.resolve(null),
-            window.hermesHub.getSessions ? window.hermesHub.getSessions() : Promise.resolve(null),
-          ]);
-          if (loadedDevices && loadedDevices.length > 0) {
-            setDevices(loadedDevices);
-          }
-          if (health) {
-            setAgentHealth(health);
-          }
-          if (ts) {
-            setTailscaleState(ts);
-          }
-          if (sync) {
-            setSyncthingState(sync);
-            if (sync.transferState?.activeTransfers?.length > 0) {
-              setActiveTransfer(sync.transferState.activeTransfers[0]);
-            }
-          }
-          if (loadedSessions && loadedSessions.length > 0) {
-            setSessions(loadedSessions);
-          }
-        } catch (err) {
-          console.warn('Failed to initialize local agent data over IPC:', err);
-        }
-      }
+  const loadHubData = async () => {
+    if (!window.hermesHub) {
+      setDataError('The secure desktop bridge is unavailable. Restart Hermes Hub.');
+      setIsLoadingData(false);
+      return;
     }
+    setIsLoadingData(true);
+    setDataError(null);
+    try {
+      const [settings, onboardingState] = await Promise.all([
+        window.hermesHub.getAppSettings() as Promise<AppSettings>,
+        window.hermesHub.getOnboardingState(),
+      ]);
+      setDemoMode(settings.demoMode);
+      setOnboarding(onboardingState);
+      setRuntimeHealth(onboardingState.runtime);
 
-    initLocalAgent();
+      if (settings.demoMode) {
+        setDevices(MOCK_DEVICES); setStats(MOCK_OVERALL_STATS); setActiveTransfer(MOCK_ACTIVE_TRANSFER);
+        setSessions(MOCK_SESSIONS); setMemories(MOCK_MEMORIES); setSkills(MOCK_SKILLS); setFiles(MOCK_FILES);
+        setVaultSecrets(MOCK_VAULT_SECRETS); setActivity(MOCK_ACTIVITY); setBackups(MOCK_BACKUPS);
+        return;
+      }
+
+      const results = await Promise.allSettled([
+        window.hermesHub.getDevices(), window.hermesHub.getOverallStats(), window.hermesHub.getAgentHealth(),
+        window.hermesHub.getTailscaleState(), window.hermesHub.getSyncthingState(), window.hermesHub.getSessions(),
+        window.hermesHub.getMemories(), window.hermesHub.getSkills(), window.hermesHub.getFiles(),
+        window.hermesHub.getVaultSecrets(), window.hermesHub.getActivity(), window.hermesHub.getBackups(),
+        window.hermesHub.getRuntimeHealth(),
+      ]);
+      const value = <T,>(index: number, fallback: T): T => results[index].status === 'fulfilled' ? results[index].value as T : fallback;
+      setDevices(value(0, [])); setStats(value(1, stats)); setAgentHealth(value(2, null));
+      const ts = value<TailscaleState | null>(3, null); const sync = value<SyncthingState | null>(4, null);
+      setTailscaleState(ts); setSyncthingState(sync); setActiveTransfer(sync?.transferState?.activeTransfers?.[0] || null);
+      setSessions(value(5, [])); setMemories(value(6, [])); setSkills(value(7, [])); setFiles(value(8, []));
+      setVaultSecrets(value(9, [])); setActivity(value(10, [])); setBackups(value(11, [])); setRuntimeHealth(value(12, onboardingState.runtime));
+      const failed = results.filter((result) => result.status === 'rejected').length;
+      if (failed) setDataError(`${failed} local data source${failed === 1 ? '' : 's'} could not be loaded. Available data is shown.`);
+    } catch (error: any) {
+      setDataError(error?.message || 'Unable to load local Hermes Hub data.');
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    loadHubData();
+    const unsubscribe = window.hermesHub?.onUpdateStatus?.((status) => setUpdateStatus(status));
+    return () => unsubscribe?.();
   }, []);
 
   const showNotification = (msg: string) => {
@@ -203,10 +258,8 @@ export const App: React.FC = () => {
         return null;
       }
     }
-    // Simulation fallback
-    await new Promise((r) => setTimeout(r, 8));
-    showNotification('Agent responded in 8ms (loopback IPC) ✓');
-    return 8;
+    showNotification('Local agent bridge is unavailable');
+    return null;
   };
 
   const handlePingTailscalePeer = async (ipOrHost: string): Promise<{ success: boolean; latencyMs?: number; via?: string }> => {
@@ -224,11 +277,8 @@ export const App: React.FC = () => {
         return { success: false };
       }
     }
-    // Simulation fallback
-    await new Promise((r) => setTimeout(r, 18));
-    const mockLatency = Math.floor(Math.random() * 8) + 12;
-    showNotification(`Tailscale ping to ${ipOrHost}: ${mockLatency}ms via direct (simulated) ✓`);
-    return { success: true, latencyMs: mockLatency, via: 'direct' };
+    showNotification('Tailscale integration is unavailable');
+    return { success: false };
   };
 
   const handleSyncNow = async () => {
@@ -262,10 +312,8 @@ export const App: React.FC = () => {
         setIsSyncing(false);
       }
     } else {
-      setTimeout(() => {
-        setIsSyncing(false);
-        showNotification('Everything synchronized (simulated) ✓');
-      }, 1200);
+      setIsSyncing(false);
+      showNotification('Synchronization is unavailable until the desktop bridge is restored');
     }
   };
 
@@ -348,32 +396,49 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleCreateBackup = () => {
-    const newBackup: BackupRecord = {
-      id: `bak-${Date.now()}`,
-      name: `hub-backup-${new Date().toISOString().slice(0, 10)}.tar.gz`,
-      createdAt: new Date().toISOString(),
-      sizeBytes: 248 * 1024 * 1024,
-      health: 'valid',
-      itemCounts: {
-        sessions: stats.sessionsCount,
-        memories: stats.memoriesCount,
-        skills: stats.skillsCount,
-        configs: 6,
-      },
-      originDevice: 'Desktop-PC',
-    };
-    setBackups([newBackup, ...backups]);
-    showNotification('Safe local snapshot backup archive created ✓');
+  const handleCreateBackup = async () => {
+    if (!window.hermesHub?.createBackup) {
+      showNotification('Backup service is unavailable');
+      return;
+    }
+    try {
+      const newBackup = await window.hermesHub.createBackup();
+      setBackups((current) => [newBackup, ...current.filter((item) => item.id !== newBackup.id)]);
+      showNotification('Safe local backup created ✓');
+    } catch (error: any) {
+      showNotification(`Backup failed: ${error?.message || 'Unknown error'}`);
+    }
   };
 
-  const handleSaveSecret = (secret: VaultSecret) => {
-    setVaultSecrets((current) => {
-      const existingIndex = current.findIndex((item) => item.id === secret.id);
-      if (existingIndex === -1) return [secret, ...current];
-      return current.map((item) => item.id === secret.id ? secret : item);
-    });
-    showNotification(`Secret ${secret.key} encrypted and saved to OS Credential Manager ✓`);
+  const handleSaveSecret = async (secret: VaultSecret) => {
+    if (demoMode) {
+      setVaultSecrets((current) => [secret, ...current.filter((item) => item.id !== secret.id)]);
+      showNotification(`Demo secret ${secret.key} saved locally for this session`);
+      return;
+    }
+    try {
+      const saved = await window.hermesHub!.saveVaultSecret(secret);
+      setVaultSecrets((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+      showNotification(`Secret ${secret.key} encrypted with Windows secure storage ✓`);
+    } catch (error: any) {
+      showNotification(`Unable to save secret: ${error?.message || 'Secure storage error'}`);
+    }
+  };
+
+  const handleRevealSecret = async (id: string) => {
+    if (demoMode) return vaultSecrets.find((secret) => secret.id === id) || null;
+    return window.hermesHub?.getVaultSecret(id) || null;
+  };
+
+  const handleDeleteSecret = async (id: string) => {
+    const removed = demoMode ? true : await window.hermesHub?.deleteVaultSecret(id);
+    if (removed) setVaultSecrets((current) => current.filter((secret) => secret.id !== id));
+    return Boolean(removed);
+  };
+
+  const handleCompleteOnboarding = async (input: CompleteOnboardingInput) => {
+    if (!window.hermesHub) throw new Error('Desktop bridge unavailable');
+    await window.hermesHub.completeOnboarding(input);
   };
 
   const handleExportDiagnostics = async () => {
@@ -408,8 +473,18 @@ export const App: React.FC = () => {
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
 
+        <RuntimeStatusBar
+          health={runtimeHealth}
+          update={updateStatus}
+          loading={isLoadingData}
+          onRetry={loadHubData}
+          onOpenSettings={() => setCurrentTab('settings')}
+        />
+
         {/* View Container */}
         <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+          {demoMode && <div className="mb-5 flex items-center justify-between rounded-xl border border-violet-500/25 bg-violet-500/10 px-4 py-2.5 text-xs text-violet-600 dark:text-violet-300"><span><strong>Demo Mode</strong> — all content on this screen is sample data.</span><button onClick={() => setCurrentTab('settings')} className="font-semibold hover:underline">Change</button></div>}
+          {dataError && <div className="mb-5 flex items-center justify-between rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-300"><span>{dataError}</span><button onClick={loadHubData} className="font-semibold hover:underline">Retry</button></div>}
           {currentTab === 'dashboard' && (
             <DashboardView
               devices={devices}
@@ -445,7 +520,7 @@ export const App: React.FC = () => {
           {currentTab === 'files' && <FilesView files={files} />}
 
           {currentTab === 'vault' && (
-            <VaultView secrets={vaultSecrets} onSaveSecret={handleSaveSecret} />
+            <VaultView secrets={vaultSecrets} onSaveSecret={handleSaveSecret} onRevealSecret={handleRevealSecret} onDeleteSecret={handleDeleteSecret} />
           )}
 
           {currentTab === 'activity' && <ActivityView activities={activity} />}
@@ -491,6 +566,10 @@ export const App: React.FC = () => {
         onSync={handleSyncNow}
         onAddDevice={() => setIsAddDeviceOpen(true)}
       />
+
+      {onboarding && !onboarding.completed && (
+        <FirstRunWizard state={onboarding} onComplete={handleCompleteOnboarding} />
+      )}
 
       {/* Floating Notification Toast */}
       {notification && (

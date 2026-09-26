@@ -81,6 +81,15 @@ export const IPC_CHANNELS = {
   SHOW_NOTIFICATION: 'hermes-hub:show-notification',
   GET_DIAGNOSTICS_REPORT: 'hermes-hub:get-diagnostics-report',
   GITHUB_UPDATE: 'hermes-hub:github-update',
+  CHECK_FOR_UPDATES: 'hermes-hub:check-for-updates',
+  DOWNLOAD_AND_INSTALL_UPDATE: 'hermes-hub:download-and-install-update',
+  GET_APP_VERSION: 'hermes-hub:get-app-version',
+  UPDATE_STATUS: 'hermes-hub:update-status',
+  GET_RUNTIME_HEALTH: 'hermes-hub:get-runtime-health',
+  GET_ONBOARDING_STATE: 'hermes-hub:get-onboarding-state',
+  COMPLETE_ONBOARDING: 'hermes-hub:complete-onboarding',
+  GET_VAULT_SECRET: 'hermes-hub:get-vault-secret',
+  DELETE_VAULT_SECRET: 'hermes-hub:delete-vault-secret',
 } as const;
 
 export interface GithubUpdateResult {

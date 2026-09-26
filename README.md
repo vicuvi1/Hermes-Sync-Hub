@@ -99,6 +99,21 @@ pnpm test
 pnpm dev
 ```
 
+### Windows installation
+
+Tagged releases publish an x64 Windows installer named `Hermes-Hub-Setup-<version>-x64.exe` on the GitHub Releases page. The installer creates Start Menu and Desktop shortcuts and keeps application data when uninstalling by default.
+
+Release builds check GitHub Releases in the background. Use **Settings → Application Updates → GitHub Update** to download, verify, install, and restart in one step. Development builds intentionally disable release updates.
+
+> Windows SmartScreen may warn on the initial unsigned releases. Confirm that the installer was downloaded from this repository's official GitHub Release and verify the attached checksum before running it. The build configuration is ready for certificate-based signing when a signing certificate is available.
+
+To publish a release, update the desktop package version, commit it, and push the matching tag:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
 ---
 
 ## 🔐 Security & Privacy
@@ -113,18 +128,20 @@ pnpm dev
 ## 🗺️ Roadmap & Milestones
 
 - [x] **Milestone 1**: Project foundation, monorepo, Electron + React UI shell, Dashboard, responsive mock states, test suite.
-- [ ] **Milestone 2**: Local Device Agent daemon & persistent device identity.
-- [ ] **Milestone 3**: Hermes automatic filesystem discovery & non-destructive status inspection.
-- [ ] **Milestone 4**: Tailscale CLI/API adapter integration.
-- [ ] **Milestone 5**: Syncthing REST API adapter integration.
-- [ ] **Milestone 6**: Real multi-device state coordination.
-- [ ] **Milestone 7**: Zero-friction pairing flow (`HERMES-XXXX-XXXX` + QR).
-- [ ] **Milestone 8**: Managed workspace directory and atomic snapshots.
-- [ ] **Milestone 9**: Safe file synchronization (Memories, Skills, Configs).
-- [ ] **Milestone 10**: Session exports and history browser.
-- [ ] **Milestone 11**: Encrypted hardware vault integration.
-- [ ] **Milestone 12**: Automated backups & revision rollback.
-- [ ] **Milestone 13**: System tray, Windows auto-start, notifications.
+- [x] **Milestone 2**: Local Device Agent daemon & persistent device identity.
+- [x] **Milestone 3**: Hermes automatic filesystem discovery & non-destructive status inspection.
+- [x] **Milestone 4**: Tailscale CLI/API adapter integration.
+- [x] **Milestone 5**: Syncthing REST API adapter integration.
+- [x] **Milestone 6**: Persistent device registry and live reconciliation.
+- [x] **Milestone 7**: Pairing flow (`HERMES-XXXX-XXXX` + QR-ready payloads).
+- [x] **Milestone 8**: Managed workspace directory and atomic snapshots.
+- [x] **Milestone 9**: Safe file synchronization (Memories, Skills, Configs).
+- [x] **Milestone 10**: Session exports and history browser.
+- [x] **Milestone 11**: AES-GCM Vault with Windows-protected master key.
+- [x] **Milestone 12**: Automated backups & revision rollback.
+- [x] **Milestone 13**: System tray, Windows auto-start, notifications.
+- [x] **Milestone 14**: Windows installer, first-run onboarding, honest live states, and GitHub Releases updater.
+- [ ] **Next**: Cross-device conflict resolution UI, unified search, and per-device sync policies.
 
 ---
 

@@ -6,6 +6,9 @@ dist-electron/
 release/
 out/
 build/
+!apps/desktop/build/
+!apps/desktop/build/icon.png
+!apps/desktop/build/icon.svg
 
 # Environment and Secrets (CRITICAL SECURITY)
 .env

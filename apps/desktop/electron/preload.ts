@@ -37,6 +37,10 @@ contextBridge.exposeInMainWorld('hermesHub', {
     ipcRenderer.invoke(IPC_CHANNELS.RESOLVE_SYNC_CONFLICT, conflictId, resolution),
   // Milestone 10 Sessions
   getSessions: (options?: any) => ipcRenderer.invoke(IPC_CHANNELS.GET_SESSIONS, options),
+  getMemories: () => ipcRenderer.invoke(IPC_CHANNELS.GET_MEMORIES),
+  getSkills: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SKILLS),
+  getFiles: () => ipcRenderer.invoke(IPC_CHANNELS.GET_FILES),
+  getActivity: () => ipcRenderer.invoke(IPC_CHANNELS.GET_ACTIVITY),
   getSessionDetail: (sessionId: string) => ipcRenderer.invoke(IPC_CHANNELS.GET_SESSION_DETAIL, sessionId),
   exportSession: (options: any) => ipcRenderer.invoke(IPC_CHANNELS.EXPORT_SESSION, options),
   importSession: (payload: any) => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_SESSION, payload),
@@ -55,6 +59,21 @@ contextBridge.exposeInMainWorld('hermesHub', {
   showNotification: (title: string, body: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.SHOW_NOTIFICATION, title, body),
   getDiagnosticsReport: () => ipcRenderer.invoke(IPC_CHANNELS.GET_DIAGNOSTICS_REPORT),
-  githubUpdate: () => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_UPDATE),
+  getVaultSecrets: () => ipcRenderer.invoke(IPC_CHANNELS.GET_VAULT_SECRETS),
+  getVaultSecret: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.GET_VAULT_SECRET, id),
+  saveVaultSecret: (secret: any) => ipcRenderer.invoke(IPC_CHANNELS.SAVE_VAULT_SECRET, secret),
+  deleteVaultSecret: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.DELETE_VAULT_SECRET, id),
+  getRuntimeHealth: () => ipcRenderer.invoke(IPC_CHANNELS.GET_RUNTIME_HEALTH),
+  getOnboardingState: () => ipcRenderer.invoke(IPC_CHANNELS.GET_ONBOARDING_STATE),
+  completeOnboarding: (input: any) => ipcRenderer.invoke(IPC_CHANNELS.COMPLETE_ONBOARDING, input),
+  getAppVersion: () => ipcRenderer.invoke(IPC_CHANNELS.GET_APP_VERSION),
+  checkForUpdates: () => ipcRenderer.invoke(IPC_CHANNELS.CHECK_FOR_UPDATES),
+  downloadAndInstallUpdate: () => ipcRenderer.invoke(IPC_CHANNELS.DOWNLOAD_AND_INSTALL_UPDATE),
+  githubUpdate: () => ipcRenderer.invoke(IPC_CHANNELS.DOWNLOAD_AND_INSTALL_UPDATE),
+  onUpdateStatus: (callback: (status: any) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: any) => callback(status);
+    ipcRenderer.on(IPC_CHANNELS.UPDATE_STATUS, listener);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.UPDATE_STATUS, listener);
+  },
 });
 

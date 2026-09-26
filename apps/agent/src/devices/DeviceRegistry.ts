@@ -10,10 +10,12 @@ export class DeviceRegistryService {
   private identityService: DeviceIdentityService;
   private customStorageDir?: string;
   private memoryCache: Device[] | null = null;
+  private seedDemoDevices: boolean;
 
-  constructor(identityService?: DeviceIdentityService, customStorageDir?: string) {
+  constructor(identityService?: DeviceIdentityService, customStorageDir?: string, seedDemoDevices = true) {
     this.identityService = identityService || new DeviceIdentityService(customStorageDir);
     this.customStorageDir = customStorageDir;
+    this.seedDemoDevices = seedDemoDevices;
   }
 
   getStorageDirectory(): string {
@@ -208,12 +210,17 @@ export class DeviceRegistryService {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
           // Ensure local device identity is updated to current machine identity
-          const list = parsed.map((d: Device) => {
+          let list = parsed.map((d: Device) => {
             if (d.deviceId === localDev.deviceId || d.hostname === localDev.hostname) {
               return { ...d, ...localDev };
             }
             return d;
           });
+
+          if (!this.seedDemoDevices) {
+            const demoIds = new Set(['dev-zenbook-02', 'dev-thinkpad-03', 'dev-macbook-04']);
+            list = list.filter((device: Device) => !demoIds.has(device.deviceId));
+          }
 
           // If local device not found in array, add it to beginning
           if (!list.some((d: Device) => d.deviceId === localDev.deviceId || d.hostname === localDev.hostname)) {
@@ -228,7 +235,7 @@ export class DeviceRegistryService {
       }
     }
 
-    const defaultDevices = this.getDefaultClusterDevices(localDev);
+    const defaultDevices = this.seedDemoDevices ? this.getDefaultClusterDevices(localDev) : [localDev];
     this.saveDevices(defaultDevices);
     this.memoryCache = defaultDevices;
     return defaultDevices;

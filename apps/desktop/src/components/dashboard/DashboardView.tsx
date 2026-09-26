@@ -3,7 +3,7 @@ import { Device, OverallStats, ActiveTransfer, ActivityEvent } from '@hermes-hub
 import { DeviceCard } from './DeviceCard';
 import { StatsGrid } from './StatsGrid';
 import { TransferWidget } from './TransferWidget';
-import { Plus, CheckCircle2, ArrowRight, ShieldCheck, Activity, Sparkles, FolderSync } from 'lucide-react';
+import { Plus, CheckCircle2, ArrowRight, Activity, AlertTriangle, Laptop } from 'lucide-react';
 import { formatTimeAgo } from '@hermes-hub/shared';
 
 interface DashboardViewProps {
@@ -27,23 +27,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onAddDevice,
   onNavigateTab,
 }) => {
+  const synchronized = stats.syncHealth === 'all_synced' && stats.pendingFilesCount === 0 && stats.conflictsCount === 0;
+  const statusTitle = devices.length === 0 ? 'No devices connected yet' : synchronized ? 'Everything synchronized' : stats.syncHealth === 'has_conflicts' ? 'Conflicts need attention' : 'Synchronization needs attention';
   return (
     <div className="space-y-6 pb-12">
       {/* Hero Synchronized Status Banner */}
-      <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent p-6 backdrop-blur-md relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className={`rounded-2xl border p-6 backdrop-blur-md relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${synchronized ? 'border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent' : 'border-amber-500/20 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent'}`}>
         <div className="flex items-start gap-4">
-          <div className="h-12 w-12 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-500 shrink-0 shadow-sm">
-            <CheckCircle2 className="h-6 w-6 stroke-[2.5]" />
+          <div className={`h-12 w-12 rounded-xl border flex items-center justify-center shrink-0 shadow-sm ${synchronized ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-500' : 'bg-amber-500/20 border-amber-500/30 text-amber-500'}`}>
+            {synchronized ? <CheckCircle2 className="h-6 w-6 stroke-[2.5]" /> : <AlertTriangle className="h-6 w-6 stroke-[2.5]" />}
           </div>
           <div>
             <div className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
-              Everything synchronized
-              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-500 font-medium font-mono">
-                Mesh Active
+              {statusTitle}
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium font-mono ${synchronized ? 'bg-emerald-500/20 text-emerald-500' : 'bg-amber-500/20 text-amber-500'}`}>
+                {synchronized ? 'Mesh Active' : 'Review Status'}
               </span>
             </div>
             <p className="text-sm text-muted-foreground mt-1 max-w-xl">
-              All online Hermes agents are connected over Tailscale and actively exchanging block updates via Syncthing. No central server required.
+              {devices.length === 0 ? 'Pair this computer or another Hermes device to begin local-first synchronization.' : synchronized ? 'All registered Hermes devices report no pending files or conflicts.' : 'Open device details or Settings to review offline services, pending files, and conflicts.'}
             </p>
           </div>
         </div>
@@ -103,6 +105,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               onSyncDevice={onSyncDevice}
             />
           ))}
+          {devices.length === 0 && <button onClick={onAddDevice} className="col-span-full flex min-h-44 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/40 text-center hover:border-primary/40 hover:bg-card"><Laptop className="h-7 w-7 text-muted-foreground" /><span className="mt-3 text-sm font-semibold">Connect your first device</span><span className="mt-1 text-xs text-muted-foreground">Use a secure pairing code to build your mesh.</span></button>}
         </div>
       </div>
 

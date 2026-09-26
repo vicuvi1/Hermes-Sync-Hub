@@ -1,6 +1,9 @@
 {
   "name": "@hermes-hub/desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "productName": "Hermes Hub",
+  "description": "Local-first control center for Hermes Agent devices",
+  "author": "vicuvi1",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.js",
@@ -9,15 +12,18 @@
     "dev:electron": "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
     "build": "tsc && vite build && tsc -p tsconfig.electron.json",
     "start": "electron .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dist:win": "pnpm build && electron-builder --win nsis --x64",
+    "release:win": "pnpm build && electron-builder --win nsis --x64 --publish always"
   },
   "dependencies": {
+    "@hermes-hub/agent": "workspace:*",
     "@hermes-hub/protocol": "workspace:*",
     "@hermes-hub/shared": "workspace:*",
     "@hermes-hub/types": "workspace:*",
     "@hermes-hub/ui": "workspace:*",
-    "@hermes-hub/agent": "workspace:*",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.8.9",
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -31,10 +37,51 @@
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.0",
     "electron": "^33.2.0",
+    "electron-builder": "^26.15.3",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.vicuvi1.hermeshub",
+    "productName": "Hermes Hub",
+    "asar": true,
+    "directories": {
+      "output": "../../release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "Hermes-Hub-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Hermes Hub",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "vicuvi1",
+        "repo": "Hermes-Sync-Hub",
+        "releaseType": "release"
+      }
+    ]
   }
 }

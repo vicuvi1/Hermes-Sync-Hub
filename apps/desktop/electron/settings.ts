@@ -12,6 +12,9 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoBackupEnabled: true,
   autoBackupFrequency: 'daily',
   maxBackupsToRetain: 10,
+  demoMode: false,
+  onboardingCompleted: false,
+  autoCheckUpdates: true,
 };
 
 export class SettingsManager {

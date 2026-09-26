@@ -662,6 +662,76 @@ export interface AppSettings {
   autoBackupEnabled: boolean;
   autoBackupFrequency: 'daily' | 'weekly';
   maxBackupsToRetain: number;
+  demoMode: boolean;
+  onboardingCompleted: boolean;
+  autoCheckUpdates: boolean;
+  hermesHome?: string;
+  workspacePath?: string;
+}
+
+export type RuntimeServiceState = 'healthy' | 'unavailable' | 'misconfigured' | 'offline' | 'error';
+
+export interface RuntimeServiceHealth {
+  state: RuntimeServiceState;
+  label: string;
+  detail: string;
+  required: boolean;
+}
+
+export interface RuntimeHealth {
+  checkedAt: string;
+  overall: 'ready' | 'attention' | 'setup-required';
+  services: {
+    agent: RuntimeServiceHealth;
+    hermes: RuntimeServiceHealth;
+    tailscale: RuntimeServiceHealth;
+    syncthing: RuntimeServiceHealth;
+    workspace: RuntimeServiceHealth;
+  };
+  lastSuccessfulSync?: string;
+}
+
+export interface OnboardingState {
+  completed: boolean;
+  detectedHermesHome?: string;
+  configuredHermesHome?: string;
+  workspacePath: string;
+  runtime: RuntimeHealth;
+}
+
+export interface CompleteOnboardingInput {
+  hermesHome?: string;
+  workspacePath?: string;
+  demoMode: boolean;
+}
+
+export type AppUpdateState =
+  | 'disabled'
+  | 'idle'
+  | 'checking'
+  | 'current'
+  | 'available'
+  | 'downloading'
+  | 'installing'
+  | 'restart-pending'
+  | 'offline'
+  | 'failed';
+
+export interface AppUpdateInfo {
+  state: AppUpdateState;
+  currentVersion: string;
+  latestVersion?: string;
+  message: string;
+  releaseName?: string;
+  releaseNotes?: string;
+  packaged: boolean;
+}
+
+export interface AppUpdateProgress extends AppUpdateInfo {
+  percent?: number;
+  bytesPerSecond?: number;
+  transferred?: number;
+  total?: number;
 }
 
 export interface DiagnosticsReport {
