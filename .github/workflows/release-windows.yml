@@ -29,8 +29,6 @@ jobs:
         run: pnpm --filter @hermes-hub/desktop exec electron-builder --win nsis --x64 --publish never
       - name: Publish GitHub release assets
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = $env:GITHUB_REF_NAME
           gh release view $tag *> $null
