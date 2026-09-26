@@ -27,7 +27,7 @@ import {
   MOCK_BACKUPS,
 } from '@hermes-hub/shared';
 import { Device, VaultSecret, BackupRecord, TailscaleState, SyncthingState } from '@hermes-hub/types';
-import { AgentHealthResponse } from '@hermes-hub/protocol';
+import { AgentHealthResponse, GithubUpdateResult } from '@hermes-hub/protocol';
 
 declare global {
   interface Window {
@@ -78,6 +78,7 @@ declare global {
       updateAppSettings: (updates: any) => Promise<any>;
       showNotification: (title: string, body: string) => Promise<boolean>;
       getDiagnosticsReport: () => Promise<any>;
+      githubUpdate: () => Promise<GithubUpdateResult>;
     };
   }
 }

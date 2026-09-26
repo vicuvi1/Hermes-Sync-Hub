@@ -55,5 +55,6 @@ contextBridge.exposeInMainWorld('hermesHub', {
   showNotification: (title: string, body: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.SHOW_NOTIFICATION, title, body),
   getDiagnosticsReport: () => ipcRenderer.invoke(IPC_CHANNELS.GET_DIAGNOSTICS_REPORT),
+  githubUpdate: () => ipcRenderer.invoke(IPC_CHANNELS.GITHUB_UPDATE),
 });
 

@@ -36,6 +36,8 @@ import {
   ArrowDown,
   ArrowUp,
   HardDrive,
+  Github,
+  LoaderCircle,
 } from 'lucide-react';
 
 interface SettingsViewProps {
@@ -216,6 +218,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [diagnosticsExported, setDiagnosticsExported] = useState(false);
   const [diagnosticsPath, setDiagnosticsPath] = useState<string | null>(null);
+  const [updateState, setUpdateState] = useState<'idle' | 'checking' | 'success' | 'error'>('idle');
+  const [updateMessage, setUpdateMessage] = useState('Pull the latest version from origin/main, rebuild, and restart automatically.');
   const [pingLatency, setPingLatency] = useState<number | null>(null);
   const [isPinging, setIsPinging] = useState(false);
 
@@ -271,6 +275,24 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     onExportDiagnostics();
     setDiagnosticsExported(true);
     setTimeout(() => setDiagnosticsExported(false), 4000);
+  };
+
+  const handleGithubUpdate = async () => {
+    if (!window.hermesHub?.githubUpdate) {
+      setUpdateState('error');
+      setUpdateMessage('GitHub updates are unavailable in this build.');
+      return;
+    }
+    setUpdateState('checking');
+    setUpdateMessage('Checking GitHub and preparing the latest version…');
+    try {
+      const result = await window.hermesHub.githubUpdate();
+      setUpdateState(result.success ? 'success' : 'error');
+      setUpdateMessage(result.message);
+    } catch (error: any) {
+      setUpdateState('error');
+      setUpdateMessage(`GitHub update failed: ${error?.message || 'Unknown error'}`);
+    }
   };
 
   const handleToggleStartup = async (val: boolean) => {
@@ -1018,6 +1040,40 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   notificationsEnabled ? 'translate-x-5' : 'translate-x-0'
                 }`}
               />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* GitHub updater */}
+      <div className="space-y-3">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          Application Updates
+        </h3>
+        <div className="rounded-xl border border-border bg-card/70 p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl border border-border bg-background p-2.5 text-foreground">
+                <Github className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-foreground">GitHub Update</div>
+                <div className={`mt-1 max-w-2xl text-xs ${updateState === 'error' ? 'text-rose-500' : updateState === 'success' ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                  {updateMessage}
+                </div>
+                <div className="mt-2 flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <Shield className="h-3 w-3 text-emerald-500" />
+                  Fast-forward only · protects local changes
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={handleGithubUpdate}
+              disabled={updateState === 'checking'}
+              className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
+            >
+              {updateState === 'checking' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Github className="h-4 w-4" />}
+              <span>{updateState === 'checking' ? 'Updating…' : 'GitHub Update'}</span>
             </button>
           </div>
         </div>

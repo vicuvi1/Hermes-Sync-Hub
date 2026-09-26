@@ -80,7 +80,17 @@ export const IPC_CHANNELS = {
   UPDATE_APP_SETTINGS: 'hermes-hub:update-app-settings',
   SHOW_NOTIFICATION: 'hermes-hub:show-notification',
   GET_DIAGNOSTICS_REPORT: 'hermes-hub:get-diagnostics-report',
+  GITHUB_UPDATE: 'hermes-hub:github-update',
 } as const;
+
+export interface GithubUpdateResult {
+  success: boolean;
+  status: 'up-to-date' | 'updated' | 'blocked' | 'failed';
+  message: string;
+  previousCommit?: string;
+  currentCommit?: string;
+  restartScheduled?: boolean;
+}
 
 export interface PairingCodePayload {
   code: string; // e.g. "HERMES-84Q2-KM7D"

@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
 import { Device, OverallStats } from '@hermes-hub/types';
 import { MOCK_DEVICES, MOCK_OVERALL_STATS, redactSecrets } from '@hermes-hub/shared';
@@ -27,6 +29,7 @@ import { sendDesktopNotification } from './notifications.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const execFileAsync = promisify(execFile);
 
 let mainWindow: BrowserWindow | null = null;
 const settingsManager = new SettingsManager();
@@ -392,6 +395,84 @@ ipcMain.handle(IPC_CHANNELS.SHOW_NOTIFICATION, async (_event, title: string, bod
 
 ipcMain.handle(IPC_CHANNELS.GET_DIAGNOSTICS_REPORT, async () => {
   return diagnosticsService.generateDiagnosticsReport();
+});
+
+ipcMain.handle(IPC_CHANNELS.GITHUB_UPDATE, async () => {
+  const repositoryRoot = path.resolve(__dirname, '../../..');
+  const runGit = async (args: string[]) => {
+    const result = await execFileAsync('git', args, {
+      cwd: repositoryRoot,
+      timeout: 120_000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return result.stdout.trim();
+  };
+
+  try {
+    const dirtyFiles = await runGit(['status', '--porcelain']);
+    if (dirtyFiles) {
+      return {
+        success: false,
+        status: 'blocked',
+        message: 'Update paused because this installation has local changes. Commit or discard them first.',
+      };
+    }
+
+    const previousCommit = await runGit(['rev-parse', '--short', 'HEAD']);
+    await runGit(['-c', 'http.sslBackend=openssl', 'fetch', 'origin', 'main']);
+    const localCommit = await runGit(['rev-parse', 'HEAD']);
+    const remoteCommit = await runGit(['rev-parse', 'origin/main']);
+
+    if (localCommit === remoteCommit) {
+      return {
+        success: true,
+        status: 'up-to-date',
+        message: `Hermes Hub is already up to date (${previousCommit}).`,
+        previousCommit,
+        currentCommit: previousCommit,
+      };
+    }
+
+    const commonAncestor = await runGit(['merge-base', localCommit, remoteCommit]);
+    if (commonAncestor !== localCommit) {
+      return {
+        success: false,
+        status: 'blocked',
+        message: 'The local branch has diverged from GitHub. Update safely from Git before using one-click updates.',
+        previousCommit,
+      };
+    }
+
+    await runGit(['-c', 'http.sslBackend=openssl', 'pull', '--ff-only', 'origin', 'main']);
+    const commandShell = process.env.ComSpec || 'cmd.exe';
+    await execFileAsync(commandShell, ['/d', '/s', '/c', 'pnpm install --frozen-lockfile && pnpm build'], {
+      cwd: repositoryRoot,
+      timeout: 10 * 60_000,
+      maxBuffer: 20 * 1024 * 1024,
+    });
+    const currentCommit = await runGit(['rev-parse', '--short', 'HEAD']);
+
+    setTimeout(() => {
+      app.relaunch();
+      app.exit(0);
+    }, 1500);
+
+    return {
+      success: true,
+      status: 'updated',
+      message: `Updated from ${previousCommit} to ${currentCommit}. Restarting Hermes Hub…`,
+      previousCommit,
+      currentCommit,
+      restartScheduled: true,
+    };
+  } catch (error: any) {
+    const detail = error?.stderr?.trim() || error?.message || 'Unknown update error';
+    return {
+      success: false,
+      status: 'failed',
+      message: `GitHub update failed: ${detail}`,
+    };
+  }
 });
 
 ipcMain.handle(IPC_CHANNELS.EXPORT_DIAGNOSTICS, async (_event, outputPath?: string) => {
