@@ -43,7 +43,7 @@ export class AgentClient {
   private baseUrl: string;
   private timeoutMs: number;
 
-  constructor(baseUrl?: string, timeoutMs = 2500) {
+  constructor(baseUrl?: string, timeoutMs = 10_000) {
     this.baseUrl = baseUrl || `http://127.0.0.1:${DEFAULT_AGENT_PORT}`;
     this.timeoutMs = timeoutMs;
   }

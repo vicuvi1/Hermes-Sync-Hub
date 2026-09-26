@@ -63,6 +63,8 @@ import {
   UpdateHermesMemoryInput,
   UpdateHermesMemoryResult,
   HermesCredentialBridgeResult,
+  HermesBoosterActionResult,
+  HermesBoosterStatus,
   SharedVaultStatus,
   VaultEnvironmentProfile,
   VaultSetupInput,
@@ -91,6 +93,15 @@ declare global {
       pushSourceRepository: (input: SourceRepositoryPushInput) => Promise<SourceRepositoryResult>;
       exportDiagnostics: (outputPath?: string) => Promise<{ success: boolean; filePath?: string; report?: any }>;
       getHermesStatus: () => Promise<any>;
+      getHermesBoosterStatus: () => Promise<HermesBoosterStatus>;
+      runHermesDoctor: () => Promise<HermesBoosterActionResult>;
+      updateHermes: (confirmed: boolean) => Promise<HermesBoosterActionResult>;
+      updateHermesSkills: (confirmed: boolean) => Promise<HermesBoosterActionResult>;
+      syncHermesSkills: (confirmed: boolean) => Promise<HermesBoosterActionResult>;
+      setHermesPluginEnabled: (name: string, enabled: boolean) => Promise<HermesBoosterActionResult>;
+      updateHermesPlugin: (name: string, confirmed: boolean) => Promise<HermesBoosterActionResult>;
+      testHermesMcp: (name: string) => Promise<HermesBoosterActionResult>;
+      openHermesApp: () => Promise<boolean>;
       getTailscaleState: () => Promise<TailscaleState>;
       pingTailscalePeer: (ipOrHost: string) => Promise<{ success: boolean; latencyMs?: number; via?: string }>;
       getSyncthingState: () => Promise<SyncthingState>;
@@ -615,7 +626,7 @@ export const App: React.FC = () => {
             <MemoryView memories={memories} devices={devices} initialSelectedMemoryId={location.tab === 'memory' ? location.entityId : undefined} onSaveMemory={handleUpdateMemory} />
           )}
 
-          {currentTab === 'hermes' && <HermesView sessions={sessions} memories={memories} skills={skills} files={files} vaultStatus={vaultStatus} onRefreshAll={loadHubData} />}
+          {currentTab === 'hermes' && <HermesView sessions={sessions} memories={memories} skills={skills} files={files} vaultStatus={vaultStatus} onRefreshAll={loadHubData} onNavigate={handleNavigate} />}
 
           {currentTab === 'skills' && (
             <SkillsView skills={skills} devices={devices} initialSelectedSkillId={location.tab === 'skills' ? location.entityId : undefined} />

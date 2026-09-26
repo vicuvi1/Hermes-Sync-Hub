@@ -62,6 +62,10 @@ export class HermesService implements IHermesService {
     this.discovery = discovery || new HermesDiscoveryService(manualHome);
   }
 
+  invalidateDetectionCache(): void {
+    this.cachedInstallation = null;
+  }
+
   /**
    * Non-destructively detects Hermes installation and environment
    */
@@ -75,7 +79,14 @@ export class HermesService implements IHermesService {
       return null;
     }
 
-    const executablePath = this.discovery.findHermesExecutable(home) || undefined;
+    // A caller-supplied home is authoritative. Falling through to PATH here
+    // can associate that workspace with an unrelated Hermes installation and
+    // makes isolated/test workspaces execute the user's real Hermes launcher.
+    const executablePath = this.manualHome
+      ? ['hermes.exe', 'hermes.cmd', 'hermes.bat']
+          .map((name) => path.join(home, 'bin', name))
+          .find((candidate) => fs.existsSync(candidate))
+      : this.discovery.findHermesExecutable(home) || undefined;
     const configPath = path.join(home, 'config.yaml');
     const hasConfig = fs.existsSync(configPath);
 
@@ -105,7 +116,12 @@ export class HermesService implements IHermesService {
   private async probeVersion(exePath?: string, home?: string): Promise<string> {
     if (exePath) {
       try {
-        const { stdout } = await execFileAsync(exePath, ['--version'], { timeout: 3000 });
+        const isCommandScript = process.platform === 'win32' && path.extname(exePath).toLowerCase() === '.cmd';
+        const executable = isCommandScript ? (process.env.ComSpec || 'C:\\Windows\\System32\\cmd.exe') : exePath;
+        const args = isCommandScript ? ['/d', '/s', '/c', exePath, '--version'] : ['--version'];
+        // Version discovery must never hold up startup or health checks. The
+        // richer Booster status performs its own explicit Hermes probes.
+        const { stdout } = await execFileAsync(executable, args, { timeout: 3_000 });
         const match = stdout.match(/Hermes Agent v([0-9a-zA-Z.+_-]+)/i);
         if (match && match[1]) {
           return match[1];
@@ -136,7 +152,7 @@ export class HermesService implements IHermesService {
       }
     }
 
-    return '0.21.5';
+    return 'unknown';
   }
 
   /**

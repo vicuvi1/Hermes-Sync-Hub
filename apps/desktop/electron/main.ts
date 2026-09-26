@@ -9,6 +9,8 @@ import {
   CompleteOnboardingInput,
   Device,
   HermesCredentialBridgeResult,
+  HermesBoosterActionResult,
+  HermesBoosterStatus,
   ModelPriceInfo,
   OverallStats,
   RequirementId,
@@ -54,6 +56,7 @@ import { sendDesktopNotification } from './notifications.js';
 import { UpdateManager } from './updater.js';
 import { SourceRepositoryService } from './sourceRepository.js';
 import { installRequirements, REQUIREMENT_CATALOG, validateRequirementIds } from './requirementsInstaller.js';
+import { HermesBoosterService } from './hermesBooster.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -113,6 +116,7 @@ let updateManager: UpdateManager | null = null;
 let legacyVaultService: VaultService | null = null;
 let backupScheduleTimer: NodeJS.Timeout | null = null;
 const sourceRepositoryService = new SourceRepositoryService();
+const hermesBoosterService = new HermesBoosterService(hermesService);
 const activityService = new ActivityService(deviceIdentity.getStorageDirectory());
 const searchService = new SearchService(path.join(deviceIdentity.getStorageDirectory(), 'search', 'index.json'));
 const sharedVaultService = new SharedVaultService(
@@ -468,6 +472,44 @@ ipcMain.handle(IPC_CHANNELS.PING_AGENT, async () => {
 ipcMain.handle(IPC_CHANNELS.GET_HERMES_STATUS, async () => {
   return hermesService.getStatus();
 });
+
+ipcMain.handle(IPC_CHANNELS.GET_HERMES_BOOSTER_STATUS, async (): Promise<HermesBoosterStatus> => hermesBoosterService.getStatus());
+ipcMain.handle(IPC_CHANNELS.RUN_HERMES_DOCTOR, async (): Promise<HermesBoosterActionResult> => hermesBoosterService.runDoctor());
+ipcMain.handle(IPC_CHANNELS.UPDATE_HERMES, async (_event, confirmed: unknown): Promise<HermesBoosterActionResult> => {
+  if (confirmed !== true) throw new Error('Updating Hermes requires explicit confirmation.');
+  const backup = await backupService.createBackup({ name: 'Before Hermes update', notes: 'Automatic recovery backup created before running the official Hermes updater.' });
+  const result = await hermesBoosterService.updateHermes();
+  result.backupId = backup.id;
+  activityService.record({ type: 'update_checked', title: result.success ? 'Hermes updated' : 'Hermes update blocked', description: result.message, sourceDevice: deviceIdentity.getLocalDevice().deviceName, status: result.success ? 'success' : 'warning', metadata: { backupId: backup.id } });
+  return result;
+});
+ipcMain.handle(IPC_CHANNELS.UPDATE_HERMES_SKILLS, async (_event, confirmed: unknown): Promise<HermesBoosterActionResult> => {
+  if (confirmed !== true) throw new Error('Updating Hermes skills requires explicit confirmation.');
+  const backup = await backupService.createBackup({ name: 'Before Hermes skill update', notes: 'Automatic recovery backup before updating Hermes skills.' });
+  const result = await hermesBoosterService.updateSkills();
+  result.backupId = backup.id;
+  void reindexSearch();
+  return result;
+});
+ipcMain.handle(IPC_CHANNELS.SYNC_HERMES_SKILLS, async (_event, confirmed: unknown): Promise<HermesBoosterActionResult> => {
+  if (confirmed !== true) throw new Error('Synchronizing Hermes skills requires explicit confirmation.');
+  return hermesBoosterService.syncSkills();
+});
+ipcMain.handle(IPC_CHANNELS.SET_HERMES_PLUGIN_ENABLED, async (_event, name: unknown, enabled: unknown): Promise<HermesBoosterActionResult> => {
+  if (typeof name !== 'string' || !/^[a-z0-9][a-z0-9._/-]{0,127}$/i.test(name)) throw new Error('Invalid plugin name.');
+  if (typeof enabled !== 'boolean') throw new Error('Plugin state must be enabled or disabled.');
+  return hermesBoosterService.setPluginEnabled(name, enabled);
+});
+ipcMain.handle(IPC_CHANNELS.UPDATE_HERMES_PLUGIN, async (_event, name: unknown, confirmed: unknown): Promise<HermesBoosterActionResult> => {
+  if (confirmed !== true) throw new Error('Updating a Hermes plugin requires explicit confirmation.');
+  if (typeof name !== 'string' || !/^[a-z0-9][a-z0-9._/-]{0,127}$/i.test(name)) throw new Error('Invalid plugin name.');
+  return hermesBoosterService.updatePlugin(name);
+});
+ipcMain.handle(IPC_CHANNELS.TEST_HERMES_MCP, async (_event, name: unknown): Promise<HermesBoosterActionResult> => {
+  if (typeof name !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(name)) throw new Error('Invalid MCP server name.');
+  return hermesBoosterService.testMcp(name);
+});
+ipcMain.handle(IPC_CHANNELS.OPEN_HERMES_APP, async () => hermesBoosterService.openHermesApp());
 
 ipcMain.handle(IPC_CHANNELS.GET_TAILSCALE_STATE, async () => {
   return tailscaleAdapter.getState();

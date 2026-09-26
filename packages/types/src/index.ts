@@ -246,6 +246,44 @@ export interface HermesCredentialBridgeResult {
   message: string;
 }
 
+export type HermesBoosterState = 'healthy' | 'warning' | 'error' | 'unavailable';
+
+export interface HermesPluginInfo {
+  name: string;
+  status: 'enabled' | 'disabled';
+  version: string;
+  description: string;
+  source: string;
+}
+
+export interface HermesBoosterStatus {
+  checkedAt: string;
+  available: boolean;
+  health: { state: HermesBoosterState; passed: number; warnings: number; errors: number; summary: string; report: string };
+  extensions: {
+    skillsSummary: string;
+    skillUpdates: string;
+    plugins: HermesPluginInfo[];
+    pluginUpdates: string;
+    mcpSummary: string;
+    mcpServers: number;
+    mcpNames: string[];
+    toolsSummary: string;
+    enabledTools: number;
+    disabledTools: number;
+    skillSync: string;
+  };
+  update: { currentVersion: string; available: boolean; checkSucceeded: boolean; summary: string; plan: string };
+  insights: string;
+}
+
+export interface HermesBoosterActionResult {
+  success: boolean;
+  message: string;
+  output: string;
+  backupId?: string;
+}
+
 export interface HermesSkill {
   id: string;
   name: string;

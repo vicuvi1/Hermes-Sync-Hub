@@ -56,6 +56,15 @@ export const IPC_CHANNELS = {
 
   // Milestone 3 Hermes Detection channels
   GET_HERMES_STATUS: 'hermes-hub:get-hermes-status',
+  GET_HERMES_BOOSTER_STATUS: 'hermes-hub:get-hermes-booster-status',
+  RUN_HERMES_DOCTOR: 'hermes-hub:run-hermes-doctor',
+  UPDATE_HERMES: 'hermes-hub:update-hermes',
+  UPDATE_HERMES_SKILLS: 'hermes-hub:update-hermes-skills',
+  SYNC_HERMES_SKILLS: 'hermes-hub:sync-hermes-skills',
+  SET_HERMES_PLUGIN_ENABLED: 'hermes-hub:set-hermes-plugin-enabled',
+  UPDATE_HERMES_PLUGIN: 'hermes-hub:update-hermes-plugin',
+  TEST_HERMES_MCP: 'hermes-hub:test-hermes-mcp',
+  OPEN_HERMES_APP: 'hermes-hub:open-hermes-app',
 
   // Milestone 4 Tailscale Integration channels
   GET_TAILSCALE_STATE: 'hermes-hub:get-tailscale-state',

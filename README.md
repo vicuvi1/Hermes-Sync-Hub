@@ -90,9 +90,15 @@ Press `Ctrl+K` from anywhere to search session titles and messages, memories, sk
 
 Vault plaintext, credentials, API keys, live databases, diagnostics, and redacted originals are never indexed. Actions such as synchronization, backup creation, update checks, and pairing show a summary and require confirmation.
 
-### Hermes Control Center
+### Hermes Booster
 
-The **Hermes** section is the direct operational bridge to the installed Hermes Agent. It shows runtime status and location, request/session counts, recorded or estimated token usage, Hermes-reported cost, models used, skills, plugins, memories, and the complete user-relevant file inventory. Current model prices are fetched from OpenRouter's public model catalog for the exact model IDs found in local sessions; prices are informational and include the fetch time.
+The **Hermes** section boosts the installed Hermes application; it does not replace Hermes chat, tasks, or agent execution. **Open Hermes App** returns to the native Hermes experience, while Hub handles operational work around it.
+
+The Overview connects nine companion capabilities: health, credentials, memory, extensions, cross-PC synchronization, backup/recovery, usage/cost, repair guidance, and updates. The Health tab executes the installed Hermes `doctor` command and presents its real redacted report. The Extensions tab uses Hermes' own `skills`, `sync`, `plugins`, `mcp`, and `tools` commands to inspect extensions, update unmodified skills, reconcile Skill Sync, test MCP connections, and enable or disable installed plugins. Interactive MCP installation and configuration opens in Hermes itself.
+
+The Update tab keeps the two products separate. **Update Hermes safely** creates a Hermes Hub recovery archive and then invokes Hermes' official non-interactive updater with Hermes' own full backup enabled. It preserves locally modified skills and parks local source changes instead of silently carrying them across the update. Close Hermes Desktop, active Hermes terminals, and gateways if Windows reports locked Hermes runtime files. Hermes Hub application releases continue to use the independent GitHub Releases updater in Settings.
+
+The Booster also shows runtime status and location, request/session counts, recorded or estimated token usage, Hermes-reported cost, models used, skills, plugins, memories, and the complete user-relevant file inventory. Current model prices are fetched from OpenRouter's public model catalog for exact model IDs found in local sessions; prices are informational and include the fetch time.
 
 The credential bridge never sends secret values through the renderer. With Shared Vault unlocked, an encrypted environment profile can be applied to the local Hermes `.env` file through privileged desktop code. Hermes Hub creates a backup first and keeps the previous environment protected with Windows secure storage. Existing provider keys in the Hermes `.env` file can also be imported directly into encrypted Shared Vault entries. Restart Hermes after changing its environment if the running process does not reload environment variables dynamically.
 

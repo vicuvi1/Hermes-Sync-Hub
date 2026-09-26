@@ -2,6 +2,18 @@
 
 All notable changes are documented here. The project uses semantic version tags.
 
+## 0.6.0 — Hermes Booster
+
+- Reframed the Hermes section as a companion control surface for the existing Hermes app, with a direct **Open Hermes App** action.
+- Added live Hermes Doctor health checks, warning/error counts, redacted diagnostic output, and repair guidance.
+- Connected the existing encrypted credential bridge, recovery-backed memory editor, cross-PC synchronization, backup center, and model cost reporting into one Booster overview.
+- Added native Hermes skills inventory, update checks, safe updates, and Skill Sync actions.
+- Added live MCP and tool inventory with per-server connection tests; interactive setup remains in Hermes itself.
+- Added native plugin inventory, search, enable/disable controls, update checks, and updates for non-bundled plugins.
+- Added the official Hermes update check and plan plus backup-first execution using `hermes update --yes --backup --keep-stash`.
+- Replaced the fictional fallback Hermes version with an honest `unknown` state when version probing fails.
+- Added strict, typed IPC contracts and tests for Booster parsing, plugin validation, and safe update arguments.
+
 ## 0.5.1 — One-click Windows requirements
 
 - Added a guided **Install missing requirements** action in Settings for Tailscale and Syncthing.

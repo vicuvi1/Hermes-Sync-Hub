@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
-import type { ModelPriceInfo, RequirementId, RequirementsInstallResult, SavedSearch, SearchIndexStatus, SearchQuery, SearchResult, UpdateHermesMemoryInput, VaultEnvironmentProfile, VaultSetupInput, VaultUnlockInput } from '@hermes-hub/types';
+import type { HermesBoosterActionResult, HermesBoosterStatus, ModelPriceInfo, RequirementId, RequirementsInstallResult, SavedSearch, SearchIndexStatus, SearchQuery, SearchResult, UpdateHermesMemoryInput, VaultEnvironmentProfile, VaultSetupInput, VaultUnlockInput } from '@hermes-hub/types';
 
 // Expose safe, typed API to Renderer process
 contextBridge.exposeInMainWorld('hermesHub', {
@@ -18,6 +18,15 @@ contextBridge.exposeInMainWorld('hermesHub', {
   pushSourceRepository: (input: any) => ipcRenderer.invoke(IPC_CHANNELS.PUSH_SOURCE_REPOSITORY, input),
   exportDiagnostics: () => ipcRenderer.invoke(IPC_CHANNELS.EXPORT_DIAGNOSTICS),
   getHermesStatus: () => ipcRenderer.invoke(IPC_CHANNELS.GET_HERMES_STATUS),
+  getHermesBoosterStatus: (): Promise<HermesBoosterStatus> => ipcRenderer.invoke(IPC_CHANNELS.GET_HERMES_BOOSTER_STATUS),
+  runHermesDoctor: (): Promise<HermesBoosterActionResult> => ipcRenderer.invoke(IPC_CHANNELS.RUN_HERMES_DOCTOR),
+  updateHermes: (confirmed: boolean): Promise<HermesBoosterActionResult> => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_HERMES, confirmed),
+  updateHermesSkills: (confirmed: boolean): Promise<HermesBoosterActionResult> => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_HERMES_SKILLS, confirmed),
+  syncHermesSkills: (confirmed: boolean): Promise<HermesBoosterActionResult> => ipcRenderer.invoke(IPC_CHANNELS.SYNC_HERMES_SKILLS, confirmed),
+  setHermesPluginEnabled: (name: string, enabled: boolean): Promise<HermesBoosterActionResult> => ipcRenderer.invoke(IPC_CHANNELS.SET_HERMES_PLUGIN_ENABLED, name, enabled),
+  updateHermesPlugin: (name: string, confirmed: boolean): Promise<HermesBoosterActionResult> => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_HERMES_PLUGIN, name, confirmed),
+  testHermesMcp: (name: string): Promise<HermesBoosterActionResult> => ipcRenderer.invoke(IPC_CHANNELS.TEST_HERMES_MCP, name),
+  openHermesApp: (): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.OPEN_HERMES_APP),
   getTailscaleState: () => ipcRenderer.invoke(IPC_CHANNELS.GET_TAILSCALE_STATE),
   pingTailscalePeer: (ipOrHost: string) => ipcRenderer.invoke(IPC_CHANNELS.PING_TAILSCALE_PEER, ipOrHost),
   getSyncthingState: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SYNCTHING_STATE),
