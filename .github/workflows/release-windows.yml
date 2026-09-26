@@ -21,9 +21,11 @@ jobs:
         run: npm install --global pnpm@12.6.0
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Build workspace
+        run: pnpm build
       - name: Test
         run: pnpm test
-      - name: Build and publish installer
-        run: pnpm --filter @hermes-hub/desktop release:win
+      - name: Package and publish installer
+        run: pnpm --filter @hermes-hub/desktop exec electron-builder --win nsis --x64 --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
