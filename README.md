@@ -1,20 +1,70 @@
 # Hermes Hub
 
-> A Windows-first, local-first desktop control center for discovering, organizing, backing up, and synchronizing Hermes Agent data across trusted devices.
+### The local-first companion for Hermes Agent on Windows
 
-[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows)](https://github.com/vicuvi1/Hermes-Sync-Hub/releases)
-[![Release](https://img.shields.io/github/v/release/vicuvi1/Hermes-Sync-Hub)](https://github.com/vicuvi1/Hermes-Sync-Hub/releases/latest)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-[![Electron](https://img.shields.io/badge/Electron-33-47848F?logo=electron)](https://www.electronjs.org/)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+Run Hermes with confidence across one or several PCs. Hermes Hub gives you one visual control center for health, memories, skills, MCP servers, plugins, credentials, backups, synchronization, usage, and safe updates—without replacing the Hermes app you already use.
 
-Hermes Hub brings the operational parts of a Hermes Agent installation into one desktop application. It shows the real state of Hermes, the local workspace, Tailscale, Syncthing, backups, sessions, memories, skills, configuration files, and encrypted secrets. It is designed for personal infrastructure: your data remains on your machines, and optional device-to-device transport uses tools you control.
+[![Latest release](https://img.shields.io/github/v/release/vicuvi1/Hermes-Sync-Hub?display_name=tag&sort=semver)](https://github.com/vicuvi1/Hermes-Sync-Hub/releases/latest)
+[![Windows CI](https://github.com/vicuvi1/Hermes-Sync-Hub/actions/workflows/ci.yml/badge.svg)](https://github.com/vicuvi1/Hermes-Sync-Hub/actions/workflows/ci.yml)
+[![Windows 10 and 11](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows)](https://github.com/vicuvi1/Hermes-Sync-Hub/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/vicuvi1/Hermes-Sync-Hub/total)](https://github.com/vicuvi1/Hermes-Sync-Hub/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
+[![Public beta](https://img.shields.io/badge/status-public%20beta-f59e0b)](#current-status)
 
-This handbook is bundled with every Windows release and is available inside the application from **Help & README** in the sidebar.
+[Download for Windows](https://github.com/vicuvi1/Hermes-Sync-Hub/releases/latest) · [Read the setup guide](#five-minute-setup) · [Report a bug](https://github.com/vicuvi1/Hermes-Sync-Hub/issues/new?template=bug_report.yml) · [Request a feature](https://github.com/vicuvi1/Hermes-Sync-Hub/issues/new?template=feature_request.yml)
+
+> Hermes Hub is an independent companion project. It does not replace Hermes chat, task execution, or agent behavior; it makes the surrounding installation easier to understand, protect, synchronize, and maintain.
+
+## Why Hermes Hub?
+
+A capable local agent quickly becomes more than one executable. It accumulates memories, skills, MCP connections, provider credentials, sessions, backups, and machine-specific configuration. That is manageable on one computer and surprisingly fragile across several.
+
+Hermes Hub turns that operational complexity into a desktop workflow:
+
+- **See what is real.** Health screens use live local services and show unavailable, offline, misconfigured, and failed states honestly.
+- **Keep working across PCs.** Choose an initial Main PC, transport supported file-based data with Syncthing, and preserve ambiguous changes as conflicts.
+- **Protect before changing.** Memory edits, baseline adoption, restores, and Hermes updates create recovery material first.
+- **Manage the Hermes ecosystem.** Inspect Hermes Doctor, skills, Skill Sync, MCP servers, tools, plugins, usage, and update status from one place.
+- **Carry credentials safely.** Store API keys, private keys, certificates, recovery codes, and `.env` profiles in a password-unlocked encrypted Shared Vault.
+- **Stay local-first.** There is no Hermes Hub account, hosted control plane, advertising, or analytics telemetry.
+
+## At a glance
+
+| Capability | What it gives you |
+|---|---|
+| **Hermes Booster** | Live Doctor results, extension inventory, MCP tests, plugin controls, usage/cost visibility, and backup-first Hermes updates. |
+| **Universal Command Center** | Press `Ctrl+K` to find sessions, memories, skills, files, devices, backups, activity, settings, and safe actions. |
+| **Memory and workspace tools** | Browse real Hermes content, edit supported Markdown memories safely, inspect revisions, and recover earlier states. |
+| **Multi-PC workflow** | Main-PC onboarding, bidirectional supported-file synchronization, explicit conflicts, device health, and recovery copies. |
+| **Shared Vault** | AES-256-GCM encrypted secrets and environment profiles synchronized only as ciphertext. |
+| **Backup and recovery** | Create, verify, retain, browse, restore, and migrate recoverable bundles from the UI. |
+| **Windows releases** | NSIS installer, Desktop and Start Menu shortcuts, one-click application updates, checksums, and an SBOM. |
+
+## Five-minute setup
+
+1. Open the [latest release](https://github.com/vicuvi1/Hermes-Sync-Hub/releases/latest) and download `Hermes-Hub-Setup-<version>-x64.exe`.
+2. Verify the installer against `SHA256SUMS.txt`, then run it. Current builds are unsigned, so Windows SmartScreen may require **More info → Run anyway**.
+3. Start Hermes Hub from the Desktop or Start Menu and let onboarding detect Hermes and the managed workspace.
+4. Open **Hermes** to review live health, extensions, usage, credentials, and updates.
+5. For multiple PCs, install Tailscale and Syncthing from **Settings**, then follow [Main PC and multi-PC synchronization](#main-pc-and-multi-pc-synchronization).
+
+No Git, Node.js, pnpm, or source checkout is required for the installed application.
+
+## Current status
+
+Hermes Hub is a **Windows x64 public beta**. Daily local inspection, encrypted Vault storage, backups, the Command Center, packaged updates, and the native Hermes Booster are ready for practical use. Multi-device synchronization and conflict recovery are intentionally conservative and should be paired with verified backups while the beta matures.
+
+See [limitations and roadmap](#limitations-and-roadmap) before depending on the project for irreplaceable data. If something behaves unexpectedly, export redacted diagnostics from Settings and open a [bug report](https://github.com/vicuvi1/Hermes-Sync-Hub/issues/new?template=bug_report.yml).
+
+This complete handbook is bundled with every Windows release and opens inside the application from **Help & README**. The GitHub page and in-app guide therefore stay aligned with the installed version.
 
 ## Table of contents
 
 - [What Hermes Hub does](#what-hermes-hub-does)
+- [Why Hermes Hub?](#why-hermes-hub)
+- [At a glance](#at-a-glance)
+- [Five-minute setup](#five-minute-setup)
+- [Current status](#current-status)
 - [Product principles](#product-principles)
 - [Feature tour](#feature-tour)
 - [System requirements](#system-requirements)
@@ -567,8 +617,8 @@ Artifacts in `release/` include the installer, `latest.yml`, optional blockmap, 
 3. Create and push the matching annotated tag.
 
 ```powershell
-git tag -a v0.3.0 -m "Hermes Hub v0.3.0"
-git push origin v0.3.0
+git tag -a v0.6.1 -m "Hermes Hub v0.6.1"
+git push origin v0.6.1
 ```
 
 The desktop version and tag must match. Releases are currently unsigned. Never commit signing certificates, keys, or passwords.

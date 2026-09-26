@@ -2,6 +2,14 @@
 
 All notable changes are documented here. The project uses semantic version tags.
 
+## 0.6.1 — Professional project presentation
+
+- Reworked the public README opening around the user problem, product value, trust model, major capabilities, and a five-minute Windows setup.
+- Kept the repository README and the bundled **Help & README** handbook as one versioned source of truth.
+- Added direct download, support, issue, CI, release, platform, license, and public-beta signals for new users.
+- Added curated release notes with installation, verification, highlights, known limitations, and support links.
+- Updated release automation to publish curated notes when present and generated notes as a fallback.
+
 ## 0.6.0 — Hermes Booster
 
 - Reframed the Hermes section as a companion control surface for the existing Hermes app, with a direct **Open Hermes App** action.
