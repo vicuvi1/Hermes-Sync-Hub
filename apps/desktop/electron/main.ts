@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
 import { Device, OverallStats } from '@hermes-hub/types';
@@ -112,14 +113,19 @@ function createWindow() {
     }
   });
 
-  const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
-  if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
+  const distIndexPath = path.join(__dirname, '../dist/index.html');
+  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+
+  if (devServerUrl) {
     mainWindow.loadURL(devServerUrl).catch(() => {
-      // Fallback to loading built file if dev server is not running
-      mainWindow?.loadFile(path.join(__dirname, '../dist/index.html'));
+      mainWindow?.loadFile(distIndexPath);
     });
+  } else if (fs.existsSync(distIndexPath)) {
+    mainWindow.loadFile(distIndexPath);
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    mainWindow.loadURL('http://localhost:5173').catch(() => {
+      console.warn('Vite dev server not found and dist/index.html missing');
+    });
   }
 
   // Open external links safely in external browser

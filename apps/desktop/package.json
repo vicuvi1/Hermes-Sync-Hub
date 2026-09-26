@@ -8,6 +8,7 @@
     "dev": "vite",
     "dev:electron": "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
     "build": "tsc && vite build && tsc -p tsconfig.electron.json",
+    "start": "electron .",
     "preview": "vite preview"
   },
   "dependencies": {
