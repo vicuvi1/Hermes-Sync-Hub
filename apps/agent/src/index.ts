@@ -2,6 +2,7 @@ export * from './hermes/HermesAdapter.js';
 export * from './discovery/HermesDiscovery.js';
 export * from './devices/DeviceService.js';
 export * from './sync/SyncService.js';
+export * from './sync/MeshCoordinatorService.js';
 export * from './vault/VaultService.js';
 export * from './backups/BackupService.js';
 export * from './revisions/RevisionService.js';

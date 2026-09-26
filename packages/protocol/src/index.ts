@@ -67,6 +67,10 @@ export const IPC_CHANNELS = {
   GET_SYNC_SUMMARY: 'hermes-hub:get-sync-summary',
   GET_SYNC_CONFLICTS: 'hermes-hub:get-sync-conflicts',
   RESOLVE_SYNC_CONFLICT: 'hermes-hub:resolve-sync-conflict',
+  GET_MESH_SYNC_STATUS: 'hermes-hub:get-mesh-sync-status',
+  SET_PRIMARY_DEVICE: 'hermes-hub:set-primary-device',
+  PUBLISH_PRIMARY_BASELINE: 'hermes-hub:publish-primary-baseline',
+  ADOPT_PRIMARY_BASELINE: 'hermes-hub:adopt-primary-baseline',
 
   // Milestone 10 Safe Session Access, Export & Import channels
   GET_SESSION_DETAIL: 'hermes-hub:get-session-detail',

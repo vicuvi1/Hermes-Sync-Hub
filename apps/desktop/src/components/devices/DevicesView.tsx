@@ -4,6 +4,7 @@ import { formatBytes } from '@hermes-hub/shared';
 import { DeviceCard } from '../dashboard/DeviceCard';
 import { DeviceDetailModal } from './DeviceDetailModal';
 import { DeviceCompareModal } from './DeviceCompareModal';
+import { MeshPrimaryPanel } from './MeshPrimaryPanel';
 import {
   Plus,
   Search,
@@ -87,6 +88,8 @@ export const DevicesView: React.FC<DevicesViewProps> = ({
 
   return (
     <div className="space-y-6 pb-12">
+      <MeshPrimaryPanel devices={devices} />
+
       {/* Cluster Overview Header Metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="p-4 rounded-xl bg-card border border-border shadow-xs flex items-center gap-3">

@@ -121,7 +121,8 @@ export class SyncEngineService {
   async stageSkills(
     hermesHome: string,
     workspaceSkillsDir: string,
-    dryRun = false
+    dryRun = false,
+    forceLocal = false
   ): Promise<SyncFileAction[]> {
     const actions: SyncFileAction[] = [];
     const localSkillsDir = path.join(hermesHome, 'skills');
@@ -163,7 +164,8 @@ export class SyncEngineService {
             }
           } else {
             const wsHash = this.workspaceService.calculateFileHash(workspaceTarget);
-            if (localHash !== wsHash) {
+            const workspaceStat = fs.statSync(workspaceTarget);
+            if (localHash !== wsHash && (forceLocal || localStat.mtimeMs >= workspaceStat.mtimeMs)) {
               actionType = 'staged_updated';
               if (!dryRun) {
                 fs.copyFileSync(localPath, workspaceTarget);
@@ -195,7 +197,8 @@ export class SyncEngineService {
   async stageMemories(
     hermesHome: string,
     workspaceMemoriesDir: string,
-    dryRun = false
+    dryRun = false,
+    forceLocal = false
   ): Promise<SyncFileAction[]> {
     const actions: SyncFileAction[] = [];
     if (!fs.existsSync(workspaceMemoriesDir) && !dryRun) {
@@ -220,7 +223,8 @@ export class SyncEngineService {
           }
         } else {
           const wsHash = this.workspaceService.calculateFileHash(workspaceTarget);
-          if (localHash !== wsHash) {
+          const workspaceStat = fs.statSync(workspaceTarget);
+          if (localHash !== wsHash && (forceLocal || localStat.mtimeMs >= workspaceStat.mtimeMs)) {
             actionType = 'staged_updated';
             if (!dryRun) {
               fs.copyFileSync(localPath, workspaceTarget);
@@ -270,7 +274,8 @@ export class SyncEngineService {
               }
             } else {
               const wsHash = this.workspaceService.calculateFileHash(workspaceTarget);
-              if (localHash !== wsHash) {
+              const workspaceStat = fs.statSync(workspaceTarget);
+              if (localHash !== wsHash && (forceLocal || localStat.mtimeMs >= workspaceStat.mtimeMs)) {
                 actionType = 'staged_updated';
                 if (!dryRun) {
                   fs.copyFileSync(localPath, workspaceTarget);
@@ -383,10 +388,13 @@ export class SyncEngineService {
             const rel = path.relative(workspaceLayout.skills, wsPath).replace(/\\/g, '/');
             const localDest = path.join(localSkillsDir, rel);
 
-            if (!fs.existsSync(localDest)) {
-              const wsStat = fs.statSync(wsPath);
-              const wsHash = this.workspaceService.calculateFileHash(wsPath);
+            const wsStat = fs.statSync(wsPath);
+            const wsHash = this.workspaceService.calculateFileHash(wsPath);
+            const localMissing = !fs.existsSync(localDest);
+            const workspaceIsNewer = !localMissing && wsStat.mtimeMs > fs.statSync(localDest).mtimeMs;
+            const contentDiffers = localMissing || this.workspaceService.calculateFileHash(localDest) !== wsHash;
 
+            if (contentDiffers && (localMissing || workspaceIsNewer)) {
               if (!dryRun) {
                 fs.mkdirSync(path.dirname(localDest), { recursive: true });
                 fs.copyFileSync(wsPath, localDest);
@@ -411,44 +419,131 @@ export class SyncEngineService {
     // 2. Ingest missing memories
     if (fs.existsSync(workspaceLayout.memories)) {
       const localMemoriesDir = path.join(hermesHome, 'memories');
-      const entries = fs.readdirSync(workspaceLayout.memories, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.name.startsWith('.')) continue;
-        const wsPath = path.join(workspaceLayout.memories, entry.name);
-
-        if (entry.isFile()) {
-          if (isRestrictedSqliteFile(wsPath)) continue;
-
-          let localDest: string;
-          if (entry.name === 'SOUL.md' || entry.name === 'MEMORY.md') {
-            localDest = path.join(hermesHome, entry.name);
-          } else {
-            localDest = path.join(localMemoriesDir, entry.name);
+      const scanMemories = (dir: string) => {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.name.startsWith('.')) continue;
+          const wsPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            scanMemories(wsPath);
+            continue;
           }
+          if (!entry.isFile() || isRestrictedSqliteFile(wsPath)) continue;
 
-          if (!fs.existsSync(localDest)) {
-            const wsStat = fs.statSync(wsPath);
-            const wsHash = this.workspaceService.calculateFileHash(wsPath);
+          const relative = path.relative(workspaceLayout.memories, wsPath).replace(/\\/g, '/');
+          const localDest = relative === 'SOUL.md' || relative === 'MEMORY.md'
+            ? path.join(hermesHome, relative)
+            : path.join(localMemoriesDir, relative);
+          const wsStat = fs.statSync(wsPath);
+          const wsHash = this.workspaceService.calculateFileHash(wsPath);
+          const localMissing = !fs.existsSync(localDest);
+          const workspaceIsNewer = !localMissing && wsStat.mtimeMs > fs.statSync(localDest).mtimeMs;
+          const contentDiffers = localMissing || this.workspaceService.calculateFileHash(localDest) !== wsHash;
 
+          if (contentDiffers && (localMissing || workspaceIsNewer)) {
             if (!dryRun) {
               fs.mkdirSync(path.dirname(localDest), { recursive: true });
               fs.copyFileSync(wsPath, localDest);
             }
-
             actions.push({
-              relativePath: `memories/${entry.name}`,
+              relativePath: `memories/${relative}`,
               category: 'memories',
               action: 'applied_to_local',
               sha256: wsHash,
               sizeBytes: wsStat.size,
-              message: `Applied missing workspace memory to local Hermes: ${entry.name}`,
+              message: `Applied newer workspace memory to local Hermes: ${relative}`,
             });
           }
         }
-      }
+      };
+      scanMemories(workspaceLayout.memories);
     }
 
     return actions;
+  }
+
+  /**
+   * Copies the published Main PC baseline into the local Hermes file tree.
+   * The caller must create a backup and obtain explicit user confirmation first.
+   * Live databases, secrets, Vault data, and sanitized shared configuration are not applied.
+   */
+  async adoptWorkspaceBaseline(): Promise<{ filesCopied: number; actions: SyncFileAction[] }> {
+    const hermesHome = await this.resolveHermesHome();
+    if (!hermesHome) throw new Error('Hermes home could not be found on this PC.');
+    const status = await this.workspaceService.initWorkspace();
+    const actions: SyncFileAction[] = [];
+
+    const copyTree = (sourceRoot: string, targetRoot: string, category: 'skills' | 'memories') => {
+      if (!fs.existsSync(sourceRoot)) return;
+      const scan = (dir: string) => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (entry.name.startsWith('.')) continue;
+          const source = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            scan(source);
+            continue;
+          }
+          if (!entry.isFile() || isRestrictedSqliteFile(source)) continue;
+          const relative = path.relative(sourceRoot, source);
+          let target = path.join(targetRoot, relative);
+          if (category === 'memories' && (relative === 'SOUL.md' || relative === 'MEMORY.md')) {
+            target = path.join(hermesHome, relative);
+          }
+          fs.mkdirSync(path.dirname(target), { recursive: true });
+          fs.copyFileSync(source, target);
+          const stat = fs.statSync(source);
+          actions.push({
+            relativePath: `${category}/${relative.replace(/\\/g, '/')}`,
+            category,
+            action: 'applied_to_local',
+            sha256: this.workspaceService.calculateFileHash(source),
+            sizeBytes: stat.size,
+            message: `Copied Main PC baseline file: ${relative.replace(/\\/g, '/')}`,
+          });
+        }
+      };
+      scan(sourceRoot);
+    };
+
+    copyTree(status.layout.skills, path.join(hermesHome, 'skills'), 'skills');
+    copyTree(status.layout.memories, path.join(hermesHome, 'memories'), 'memories');
+    return { filesCopied: actions.length, actions };
+  }
+
+  /** Moves stale workspace files that do not exist on the chosen Main PC into a
+   * recoverable snapshot area so they cannot leak into the new baseline. */
+  private quarantineWorkspaceOrphans(hermesHome: string, layout: WorkspaceStatus['layout']): number {
+    const quarantineRoot = path.join(layout.snapshots, `pre-baseline-orphans-${Date.now()}`);
+    let moved = 0;
+    const categories: Array<{ workspaceRoot: string; localRoot: string; category: string }> = [
+      { workspaceRoot: layout.skills, localRoot: path.join(hermesHome, 'skills'), category: 'skills' },
+      { workspaceRoot: layout.memories, localRoot: path.join(hermesHome, 'memories'), category: 'memories' },
+    ];
+
+    for (const { workspaceRoot, localRoot, category } of categories) {
+      if (!fs.existsSync(workspaceRoot)) continue;
+      const scan = (dir: string) => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const workspacePath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            scan(workspacePath);
+            continue;
+          }
+          if (!entry.isFile()) continue;
+          const relative = path.relative(workspaceRoot, workspacePath);
+          const localPath = category === 'memories' && (relative === 'SOUL.md' || relative === 'MEMORY.md')
+            ? path.join(hermesHome, relative)
+            : path.join(localRoot, relative);
+          if (fs.existsSync(localPath)) continue;
+          const destination = path.join(quarantineRoot, category, relative);
+          fs.mkdirSync(path.dirname(destination), { recursive: true });
+          fs.renameSync(workspacePath, destination);
+          moved++;
+        }
+      };
+      scan(workspaceRoot);
+    }
+    return moved;
   }
 
   /**
@@ -630,9 +725,12 @@ export class SyncEngineService {
     let bytesDownloaded = 0;
 
     if (hermesHome) {
+      if (options.force && !dryRun) {
+        this.quarantineWorkspaceOrphans(hermesHome, layout);
+      }
       // 1. Stage Skills
       if (categories.includes('skills')) {
-        const skillActions = await this.stageSkills(hermesHome, layout.skills, dryRun);
+        const skillActions = await this.stageSkills(hermesHome, layout.skills, dryRun, !!options.force);
         actions.push(...skillActions);
         skillsStaged = skillActions.filter((a) => a.action.startsWith('staged')).length;
         for (const act of skillActions) {
@@ -642,7 +740,7 @@ export class SyncEngineService {
 
       // 2. Stage Memories
       if (categories.includes('memories')) {
-        const memoryActions = await this.stageMemories(hermesHome, layout.memories, dryRun);
+        const memoryActions = await this.stageMemories(hermesHome, layout.memories, dryRun, !!options.force);
         actions.push(...memoryActions);
         memoriesStaged = memoryActions.filter((a) => a.action.startsWith('staged')).length;
         for (const act of memoryActions) {
@@ -661,7 +759,7 @@ export class SyncEngineService {
       }
 
       // 4. Ingest missing workspace files to local Hermes
-      const appliedActions = await this.applyWorkspaceToLocal(hermesHome, layout, dryRun);
+      const appliedActions = options.force ? [] : await this.applyWorkspaceToLocal(hermesHome, layout, dryRun);
       actions.push(...appliedActions);
       for (const act of appliedActions) {
         bytesDownloaded += act.sizeBytes;

@@ -19,6 +19,7 @@ import {
   SyncEngineService,
   HermesSessionService,
   BackupService,
+  MeshCoordinatorService,
   RevisionService,
   DiagnosticsService,
   VaultService,
@@ -57,6 +58,7 @@ const syncEngine = new SyncEngineService(
 const sessionService = new HermesSessionService(hermesService, workspaceService);
 const backupService = new BackupService(workspaceService, hermesService, deviceIdentity);
 const revisionService = new RevisionService(workspaceService, deviceIdentity);
+const meshCoordinator = new MeshCoordinatorService(workspaceService, deviceRegistry, backupService, syncEngine);
 const diagnosticsService = new DiagnosticsService(
   deviceIdentity,
   healthMonitor,
@@ -406,6 +408,11 @@ ipcMain.handle(IPC_CHANNELS.GET_SYNC_CONFLICTS, async () => {
 ipcMain.handle(IPC_CHANNELS.RESOLVE_SYNC_CONFLICT, async (_event, conflictId: string, resolution: any) => {
   return syncEngine.resolveConflict(conflictId, resolution);
 });
+
+ipcMain.handle(IPC_CHANNELS.GET_MESH_SYNC_STATUS, async () => meshCoordinator.getStatus());
+ipcMain.handle(IPC_CHANNELS.SET_PRIMARY_DEVICE, async (_event, deviceId: string) => meshCoordinator.setPrimaryDevice(deviceId));
+ipcMain.handle(IPC_CHANNELS.PUBLISH_PRIMARY_BASELINE, async (_event, confirmed: boolean) => meshCoordinator.publishPrimaryBaseline(confirmed));
+ipcMain.handle(IPC_CHANNELS.ADOPT_PRIMARY_BASELINE, async (_event, confirmed: boolean) => meshCoordinator.adoptPrimaryBaseline(confirmed));
 
 // Milestone 10 Safe Session Access, Export & Import
 ipcMain.handle(IPC_CHANNELS.GET_SESSIONS, async (_event, options?: any) => {

@@ -337,6 +337,62 @@ describe('Milestone 9: Safe File-Based Synchronization Engine', () => {
     });
   });
 
+  describe('Main PC baseline and ongoing two-way file sharing', () => {
+    it('propagates the newer safe memory in either direction', async () => {
+      await syncEngine.executeSyncCycle();
+      const localMemory = path.join(hermesHome, 'memories', 'user-preferences.md');
+      const workspaceMemory = path.join(workspaceService.getLayout().memories, 'user-preferences.md');
+
+      fs.writeFileSync(localMemory, '# Changed on laptop\n', 'utf-8');
+      const localTime = new Date(Date.now() + 5_000);
+      fs.utimesSync(localMemory, localTime, localTime);
+      await syncEngine.executeSyncCycle();
+      expect(fs.readFileSync(workspaceMemory, 'utf-8')).toContain('Changed on laptop');
+
+      fs.writeFileSync(workspaceMemory, '# Changed on another PC\n', 'utf-8');
+      const remoteTime = new Date(Date.now() + 10_000);
+      fs.utimesSync(workspaceMemory, remoteTime, remoteTime);
+      await syncEngine.executeSyncCycle();
+      expect(fs.readFileSync(localMemory, 'utf-8')).toContain('Changed on another PC');
+    });
+
+    it('adopts the Main PC baseline while preserving follower-only files and live databases', async () => {
+      await syncEngine.executeSyncCycle();
+      const localMemory = path.join(hermesHome, 'memories', 'user-preferences.md');
+      const followerOnly = path.join(hermesHome, 'memories', 'follower-only.md');
+      const workspaceMemory = path.join(workspaceService.getLayout().memories, 'user-preferences.md');
+      fs.writeFileSync(localMemory, '# Old follower version\n', 'utf-8');
+      fs.writeFileSync(followerOnly, '# Preserve me\n', 'utf-8');
+      fs.writeFileSync(workspaceMemory, '# Main PC baseline\n', 'utf-8');
+
+      const result = await syncEngine.adoptWorkspaceBaseline();
+      expect(result.filesCopied).toBeGreaterThan(0);
+      expect(fs.readFileSync(localMemory, 'utf-8')).toContain('Main PC baseline');
+      expect(fs.readFileSync(followerOnly, 'utf-8')).toContain('Preserve me');
+      expect(fs.readFileSync(path.join(hermesHome, 'state.db'), 'utf-8')).toBe('SQLITE-FORMAT-3-LIVE-DATA');
+      expect(fs.readFileSync(path.join(hermesHome, 'config.yaml'), 'utf-8')).toContain('sk-or-v1');
+    });
+
+    it('makes the selected Main PC authoritative during forced baseline publication', async () => {
+      await syncEngine.executeSyncCycle();
+      const localMemory = path.join(hermesHome, 'memories', 'user-preferences.md');
+      const workspaceMemory = path.join(workspaceService.getLayout().memories, 'user-preferences.md');
+      const staleWorkspaceOnly = path.join(workspaceService.getLayout().memories, 'old-peer-only.md');
+      fs.writeFileSync(localMemory, '# Trusted Main PC version\n', 'utf-8');
+      fs.writeFileSync(workspaceMemory, '# Newer timestamp but not authoritative\n', 'utf-8');
+      fs.writeFileSync(staleWorkspaceOnly, '# Stale peer file\n', 'utf-8');
+      const future = new Date(Date.now() + 60_000);
+      fs.utimesSync(workspaceMemory, future, future);
+
+      await syncEngine.executeSyncCycle({ force: true });
+      expect(fs.readFileSync(workspaceMemory, 'utf-8')).toContain('Trusted Main PC version');
+      expect(fs.existsSync(staleWorkspaceOnly)).toBe(false);
+      const quarantineDirs = fs.readdirSync(workspaceService.getLayout().snapshots).filter((name) => name.startsWith('pre-baseline-orphans-'));
+      expect(quarantineDirs.length).toBe(1);
+      expect(fs.existsSync(path.join(workspaceService.getLayout().snapshots, quarantineDirs[0], 'memories', 'old-peer-only.md'))).toBe(true);
+    });
+  });
+
   describe('HTTP REST API & AgentClient Integration', () => {
     let server: AgentServer;
     let client: AgentClient;

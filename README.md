@@ -21,6 +21,7 @@ This handbook is bundled with every Windows release and is available inside the 
 - [Install on Windows](#install-on-windows)
 - [First-run setup](#first-run-setup)
 - [Daily use](#daily-use)
+- [Main PC and multi-PC synchronization](#main-pc-and-multi-pc-synchronization)
 - [Application updates](#application-updates)
 - [Data, privacy, and security](#data-privacy-and-security)
 - [Architecture](#architecture)
@@ -184,6 +185,119 @@ Add it in **Vault**. Listings remain masked. Reveal or copy only when necessary 
 ### Quick actions
 
 Press `Ctrl+K` to open navigation and common actions, including Help.
+
+## Main PC and multi-PC synchronization
+
+This workflow solves a common first-time problem: two existing Hermes installations may contain very different memories and skills. Instead of immediately mixing both versions, Hermes Hub lets you choose one computer as the **Main PC** for the first copy. After every other computer adopts that baseline, the Main PC is no longer a one-way master; supported future changes can travel in either direction, including back to Main.
+
+### The two phases
+
+| Phase | Direction | Purpose |
+|---|---|---|
+| Initial baseline | Main PC → every follower | Make each PC start from the trusted Main PC memories and skills. |
+| Normal operation | Any PC ↔ every other PC | Share newer supported file changes through the managed workspace and Syncthing. |
+
+“Main PC” therefore means **initial source of truth**, not permanent owner of every future edit.
+
+### Before starting
+
+On every PC:
+
+1. Install the same current Hermes Hub release.
+2. Confirm Hermes Hub detects the correct Hermes home directory.
+3. Pair/register the computers in **Devices**.
+4. Configure the same `HermesHubData` folder as a Syncthing folder on every computer.
+5. Use Syncthing folder type **Send & Receive** for normal operation.
+6. Wait until Tailscale/Syncthing report the expected peers and Syncthing has no pending transfer.
+
+Do not point Syncthing at the live Hermes database directory. Syncthing transports the managed `HermesHubData` workspace, not active SQLite files.
+
+### Step 1: choose the Main PC
+
+Decide which current Hermes installation has the memories and skills you trust most. On any computer, open **Devices → Main PC & Initial Copy**, select that device, acknowledge the warning, and choose **Set as Main PC**.
+
+The selection is written to `manifests/mesh-sync-policy.json` inside the managed workspace, allowing the policy to reach the other trusted PCs through Syncthing. Selecting a different Main PC starts a new baseline generation; followers must explicitly adopt the new baseline.
+
+### Step 2: publish from the Main PC
+
+Open Hermes Hub on the computer selected as Main. In **Devices → Main PC & Initial Copy**:
+
+1. Confirm that the panel says this computer has the `primary` role.
+2. Close or pause editing of Hermes memories and skills during the short baseline operation.
+3. Select the confirmation checkbox.
+4. Choose **Back Up & Publish Baseline**.
+
+Hermes Hub first creates a recovery backup. It then stages safe skills, memories, and sanitized configuration information into the managed workspace, regenerates the manifest, marks the baseline ready, and asks Syncthing to rescan. Existing workspace files that are absent from Main are moved into a recoverable `snapshots/pre-baseline-orphans-...` area instead of being included in the new baseline or permanently deleted. The panel records a unique baseline ID so each follower can prove which generation it adopted.
+
+Wait for Syncthing to finish delivering the workspace before continuing on another PC. A “baseline ready” label only means Main finished publishing locally; Syncthing still needs time to transport those files.
+
+### Step 3: copy the baseline on every other PC
+
+On each follower PC, open the same panel and select **Refresh status**. When the Main baseline is available:
+
+1. Verify the displayed Main PC name.
+2. Stop making Hermes file edits temporarily.
+3. Select the confirmation checkbox.
+4. Choose **Back Up & Copy Main PC**.
+
+Before overwriting anything, Hermes Hub creates a local-only recovery bundle named like `local-recovery-...`. It contains the follower's current safe memory and skill files plus a SHA-256 manifest, and lives under the device metadata `recovery` directory (normally `%LOCALAPPDATA%\HermesHub\recovery` on Windows). It then replaces matching safe skill and memory files with the baseline files. Files that exist only on the follower are preserved rather than silently deleted. The resulting adoption record is stored locally for that device and baseline ID.
+
+Repeat this step separately on every follower. Never copy the Main PC application-data or Vault directory manually.
+
+### Step 4: normal two-way change sharing
+
+After a follower reports **Baseline complete**, use **Sync Now** normally on any computer:
+
+1. Hermes Hub compares the supported local files with the managed workspace.
+2. A newer local skill or memory is staged into the workspace.
+3. Syncthing carries that workspace change to the other PCs.
+4. On the receiving PC, the next sync cycle applies the newer workspace version into its local Hermes files.
+5. The manifest and device sync statistics are refreshed.
+
+This means a memory edited on a laptop can later flow to the Main PC. Main is authoritative only during baseline creation.
+
+### What is copied
+
+| Data | Baseline copy | Ongoing sharing | Notes |
+|---|---:|---:|---|
+| Skill files | Yes | Yes | Recursive file copy with hashes and manifests. |
+| `SOUL.md`, `MEMORY.md`, and memory files | Yes | Yes | Newer safe file versions move in either direction. |
+| Sanitized configuration representation | Published | One-way staging | Secrets are redacted; sanitized config is not written over a live local config. |
+| Safe session exports/snapshots | Preserved in workspace/backups | Transportable when explicitly exported | Live session databases are never copied. |
+| Live SQLite databases, WAL, SHM, journals, locks | No | No | Excluded to prevent corruption. |
+| Vault secrets and Windows-protected key material | No | No | Remain local to the Windows user/profile. |
+| API keys, tokens, passwords | No | No | Redacted or excluded. Configure credentials separately on every PC. |
+| Application binaries | No | No | Use **Application Update** for Hermes Hub releases. |
+| Source code | No | No | Use **Source Repository Sync** for the GitHub project. |
+
+### Conflicts and simultaneous edits
+
+Avoid editing the same memory or skill on two offline PCs at the same time. Hermes Hub uses content hashes and modification time to determine the newer safe file, while Syncthing may create a `.sync-conflict-*` copy when both sides changed. Hermes Hub detects those collision files and surfaces them as conflicts rather than intentionally deleting one version.
+
+When a conflict appears:
+
+1. Stop editing that file on every PC.
+2. Create or confirm a backup.
+3. Compare both versions in the conflict workflow.
+4. Choose local, remote, or keep both.
+5. Run **Sync Now** and wait for Syncthing to return to idle.
+
+### If the wrong PC was selected
+
+Do not publish it. Select the correct Main PC and start again. If the wrong baseline was already adopted, recover the previous skills and memories from the automatic `local-recovery-...` bundle, select the correct Main PC, publish a new baseline, wait for transport, and adopt the new baseline.
+
+### If a follower is offline
+
+Nothing is forced remotely. Bring it online, allow Syncthing to finish, open the panel on that follower, refresh, and explicitly adopt the current baseline. The action never happens silently.
+
+### Safety guarantees and limits
+
+- Baseline adoption requires an explicit checkbox and button click on each follower.
+- A backup is created before publishing and before follower overwrite.
+- Extra follower-only files are preserved during baseline adoption.
+- Only safe file-based categories are copied automatically.
+- Hermes Hub cannot merge the semantic meaning of two independently edited documents; simultaneous edits can require human conflict resolution.
+- A device being listed as online does not prove that Syncthing has completed transport. Check Syncthing transfer state before adoption.
 
 ## Application updates
 
@@ -398,8 +512,8 @@ Artifacts in `release/` include the installer, `latest.yml`, optional blockmap, 
 3. Create and push the matching annotated tag.
 
 ```powershell
-git tag -a v0.2.5 -m "Hermes Hub v0.2.5"
-git push origin v0.2.5
+git tag -a v0.2.6 -m "Hermes Hub v0.2.6"
+git push origin v0.2.6
 ```
 
 The desktop version and tag must match. Releases are currently unsigned. Never commit signing certificates, keys, or passwords.
@@ -441,9 +555,9 @@ Current limitations:
 - Advanced conflict workflows still need expansion.
 - Updates require GitHub Releases access.
 
-Completed: desktop foundation, local agent, Hermes discovery, adapters, registry, pairing, workspace, manifests, safe sync, sessions, encrypted Vault, backups, tray, diagnostics, onboarding, health, NSIS installer, manual/automatic updater, and in-app Help.
+Completed: desktop foundation, local agent, Hermes discovery, adapters, registry, pairing, workspace, manifests, safe sync, Main PC baseline onboarding, two-way safe-file propagation, sessions, encrypted Vault, backups, tray, diagnostics, onboarding, health, NSIS installer, manual/automatic updater, and in-app Help.
 
-Planned: richer conflict resolution, unified search, per-device sync policies, Windows code signing, and evaluation of additional packaged platforms after Windows stabilizes.
+Planned: richer conflict resolution and merge previews, unified search, more granular category policies per device, Windows code signing, and evaluation of additional packaged platforms after Windows stabilizes.
 
 ## Contributing
 

@@ -671,6 +671,36 @@ export interface AppSettings {
   repositoryWorkspacePath?: string;
 }
 
+export interface MeshSyncPolicy {
+  version: 1;
+  primaryDeviceId: string;
+  primaryDeviceName: string;
+  phase: 'awaiting-primary-publish' | 'baseline-ready';
+  baselineId?: string;
+  baselinePublishedAt?: string;
+  updatedAt: string;
+  categories: Array<'skills' | 'memories' | 'configuration'>;
+}
+
+export interface MeshSyncStatus {
+  policy: MeshSyncPolicy | null;
+  localDeviceId: string;
+  localDeviceName: string;
+  localRole: 'primary' | 'follower' | 'unconfigured';
+  baselineAdopted: boolean;
+  canPublish: boolean;
+  canAdopt: boolean;
+  message: string;
+}
+
+export interface MeshSyncActionResult {
+  success: boolean;
+  message: string;
+  status: MeshSyncStatus;
+  backupId?: string;
+  filesCopied?: number;
+}
+
 export interface SourceRepositoryStatus {
   repositoryUrl: string;
   workspacePath: string;

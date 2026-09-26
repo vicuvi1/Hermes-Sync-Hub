@@ -40,6 +40,10 @@ contextBridge.exposeInMainWorld('hermesHub', {
   getSyncConflicts: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SYNC_CONFLICTS),
   resolveSyncConflict: (conflictId: string, resolution: any) =>
     ipcRenderer.invoke(IPC_CHANNELS.RESOLVE_SYNC_CONFLICT, conflictId, resolution),
+  getMeshSyncStatus: () => ipcRenderer.invoke(IPC_CHANNELS.GET_MESH_SYNC_STATUS),
+  setPrimaryDevice: (deviceId: string) => ipcRenderer.invoke(IPC_CHANNELS.SET_PRIMARY_DEVICE, deviceId),
+  publishPrimaryBaseline: (confirmed: boolean) => ipcRenderer.invoke(IPC_CHANNELS.PUBLISH_PRIMARY_BASELINE, confirmed),
+  adoptPrimaryBaseline: (confirmed: boolean) => ipcRenderer.invoke(IPC_CHANNELS.ADOPT_PRIMARY_BASELINE, confirmed),
   // Milestone 10 Sessions
   getSessions: (options?: any) => ipcRenderer.invoke(IPC_CHANNELS.GET_SESSIONS, options),
   getMemories: () => ipcRenderer.invoke(IPC_CHANNELS.GET_MEMORIES),

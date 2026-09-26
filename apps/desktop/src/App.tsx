@@ -40,6 +40,8 @@ import {
   HermesMemory,
   HermesSession,
   HermesSkill,
+  MeshSyncActionResult,
+  MeshSyncStatus,
   OnboardingState,
   OverallStats,
   RuntimeHealth,
@@ -93,6 +95,10 @@ declare global {
       getSyncSummary: () => Promise<any>;
       getSyncConflicts: () => Promise<any>;
       resolveSyncConflict: (conflictId: string, resolution: any) => Promise<any>;
+      getMeshSyncStatus: () => Promise<MeshSyncStatus>;
+      setPrimaryDevice: (deviceId: string) => Promise<MeshSyncStatus>;
+      publishPrimaryBaseline: (confirmed: boolean) => Promise<MeshSyncActionResult>;
+      adoptPrimaryBaseline: (confirmed: boolean) => Promise<MeshSyncActionResult>;
       getSessions: (options?: any) => Promise<any[]>;
       getMemories: () => Promise<HermesMemory[]>;
       getSkills: () => Promise<HermesSkill[]>;
