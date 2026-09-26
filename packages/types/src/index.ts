@@ -478,3 +478,43 @@ export interface SafeSnapshotRecord {
   filePath: string;
 }
 
+// Milestone 9 File-Based Safe Synchronization Types
+export type SyncCategory = 'skills' | 'memories' | 'configuration';
+
+export interface SyncCycleOptions {
+  categories?: SyncCategory[];
+  force?: boolean;
+  dryRun?: boolean;
+}
+
+export interface SyncFileAction {
+  relativePath: string;
+  category: SyncCategory;
+  action: 'staged_new' | 'staged_updated' | 'unchanged' | 'conflict' | 'applied_to_local';
+  sha256: string;
+  sizeBytes: number;
+  originDevice?: string;
+  message?: string;
+}
+
+export interface SyncCycleResult {
+  success: boolean;
+  cycleId: string;
+  startedAt: string;
+  completedAt: string;
+  summary: DeviceSyncSummary;
+  actions: SyncFileAction[];
+  conflicts: ConflictItem[];
+  stagedCounts: {
+    skills: number;
+    memories: number;
+    configs: number;
+  };
+}
+
+export interface ConflictResolution {
+  conflictId: string;
+  resolution: 'use_local' | 'use_remote' | 'keep_both';
+}
+
+

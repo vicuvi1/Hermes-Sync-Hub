@@ -7,6 +7,7 @@ import { TailscaleAdapter, ITailscaleAdapter } from '../tailscale/TailscaleAdapt
 import { SyncthingAdapter, ISyncthingAdapter } from '../sync/SyncthingAdapter.js';
 import { PairingService } from '../pairing/PairingService.js';
 import { WorkspaceService } from '../workspace/WorkspaceService.js';
+import { SyncEngineService } from '../sync/SyncService.js';
 
 export const DEFAULT_AGENT_PORT = 48199;
 
@@ -21,6 +22,7 @@ export class AgentServer {
   private syncthingAdapter: ISyncthingAdapter;
   private pairingService: PairingService;
   private workspaceService: WorkspaceService;
+  private syncEngine: SyncEngineService;
 
   constructor(
     identityService?: DeviceIdentityService,
@@ -30,7 +32,8 @@ export class AgentServer {
     syncthingAdapter?: ISyncthingAdapter,
     deviceRegistry?: DeviceRegistryService,
     pairingService?: PairingService,
-    workspaceService?: WorkspaceService
+    workspaceService?: WorkspaceService,
+    syncEngine?: SyncEngineService
   ) {
     this.identityService = identityService || new DeviceIdentityService();
     this.deviceRegistry = deviceRegistry || new DeviceRegistryService(this.identityService);
@@ -50,6 +53,14 @@ export class AgentServer {
     this.workspaceService =
       workspaceService ||
       new WorkspaceService(this.identityService, this.hermesService);
+    this.syncEngine =
+      syncEngine ||
+      new SyncEngineService(
+        this.workspaceService,
+        this.hermesService,
+        this.deviceRegistry,
+        this.syncthingAdapter
+      );
   }
 
   /**
@@ -242,6 +253,54 @@ export class AgentServer {
                 const snapshot = await this.workspaceService.createSafeSnapshot(parsed);
                 res.writeHead(201, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(snapshot));
+              } catch (err: any) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+              }
+            });
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/sync/cycle') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const result = await this.syncEngine.executeSyncCycle(parsed);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+              } catch (err: any) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+              }
+            });
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/sync/summary') {
+            const summary = await this.syncEngine.getSyncSummary();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(summary));
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/sync/conflicts') {
+            const conflicts = await this.syncEngine.getConflicts();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(conflicts));
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/sync/conflicts/resolve') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const result = await this.syncEngine.resolveConflict(parsed.conflictId, parsed.resolution);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
               } catch (err: any) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: err.message }));

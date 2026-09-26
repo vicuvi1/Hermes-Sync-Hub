@@ -18,6 +18,7 @@ export interface ISyncthingAdapter {
   getFolders(): Promise<SyncthingFolder[]>;
   getConnectionState(): Promise<SyncthingConnectionState>;
   getTransferState(): Promise<SyncthingTransferState>;
+  rescanFolder(folderId?: string): Promise<boolean>;
 }
 
 export interface SyncthingConfigXmlInfo {
@@ -481,6 +482,18 @@ export class SyncthingAdapter implements ISyncthingAdapter {
   }
 
   /**
+   * Triggers an immediate rescan of a Syncthing folder via /rest/db/scan
+   */
+  async rescanFolder(folderId = 'hermes-hub-data'): Promise<boolean> {
+    try {
+      await this.fetchSyncthing(`/rest/db/scan?folder=${encodeURIComponent(folderId)}`, 3000);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Reads complete Syncthing state (devices, status, folders, connection state, transfer state)
    */
   async getState(): Promise<SyncthingState> {
@@ -706,6 +719,10 @@ export class MockSyncthingAdapter implements ISyncthingAdapter {
       isSyncing: false,
       activeTransfers: [],
     };
+  }
+
+  async rescanFolder(_folderId?: string): Promise<boolean> {
+    return true;
   }
 
   async getState(): Promise<SyncthingState> {

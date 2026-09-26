@@ -14,6 +14,7 @@ import {
   SyncthingAdapter,
   PairingService,
   WorkspaceService,
+  SyncEngineService,
 } from '@hermes-hub/agent';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -34,6 +35,12 @@ const pairingService = new PairingService(
   hermesService
 );
 const workspaceService = new WorkspaceService(deviceIdentity, hermesService);
+const syncEngine = new SyncEngineService(
+  workspaceService,
+  hermesService,
+  deviceRegistry,
+  syncthingAdapter
+);
 const agentServer = new AgentServer(
   deviceIdentity,
   healthMonitor,
@@ -42,7 +49,8 @@ const agentServer = new AgentServer(
   syncthingAdapter,
   deviceRegistry,
   pairingService,
-  workspaceService
+  workspaceService,
+  syncEngine
 );
 
 function createWindow() {
@@ -243,7 +251,28 @@ ipcMain.handle(IPC_CHANNELS.GET_OVERALL_STATS, async () => {
 });
 
 ipcMain.handle(IPC_CHANNELS.TRIGGER_SYNC_NOW, async () => {
-  return { success: true, message: 'Sync cycle triggered' };
+  try {
+    const result = await syncEngine.executeSyncCycle();
+    return { success: true, message: 'Sync cycle completed successfully', result };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Sync failed' };
+  }
+});
+
+ipcMain.handle(IPC_CHANNELS.TRIGGER_SYNC_CYCLE, async (_event, options: any) => {
+  return syncEngine.executeSyncCycle(options);
+});
+
+ipcMain.handle(IPC_CHANNELS.GET_SYNC_SUMMARY, async () => {
+  return syncEngine.getSyncSummary();
+});
+
+ipcMain.handle(IPC_CHANNELS.GET_SYNC_CONFLICTS, async () => {
+  return syncEngine.getConflicts();
+});
+
+ipcMain.handle(IPC_CHANNELS.RESOLVE_SYNC_CONFLICT, async (_event, conflictId: string, resolution: any) => {
+  return syncEngine.resolveConflict(conflictId, resolution);
 });
 
 ipcMain.handle(IPC_CHANNELS.EXPORT_DIAGNOSTICS, async () => {

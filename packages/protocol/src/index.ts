@@ -56,6 +56,12 @@ export const IPC_CHANNELS = {
   VERIFY_MANIFEST: 'hermes-hub:verify-manifest',
   GET_SNAPSHOTS: 'hermes-hub:get-snapshots',
   CREATE_SAFE_SNAPSHOT: 'hermes-hub:create-safe-snapshot',
+
+  // Milestone 9 Safe Synchronization channels
+  TRIGGER_SYNC_CYCLE: 'hermes-hub:trigger-sync-cycle',
+  GET_SYNC_SUMMARY: 'hermes-hub:get-sync-summary',
+  GET_SYNC_CONFLICTS: 'hermes-hub:get-sync-conflicts',
+  RESOLVE_SYNC_CONFLICT: 'hermes-hub:resolve-sync-conflict',
 } as const;
 
 export interface PairingCodePayload {

@@ -30,5 +30,10 @@ contextBridge.exposeInMainWorld('hermesHub', {
   verifyManifest: () => ipcRenderer.invoke(IPC_CHANNELS.VERIFY_MANIFEST),
   getSnapshots: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SNAPSHOTS),
   createSafeSnapshot: (options?: any) => ipcRenderer.invoke(IPC_CHANNELS.CREATE_SAFE_SNAPSHOT, options),
+  triggerSyncCycle: (options?: any) => ipcRenderer.invoke(IPC_CHANNELS.TRIGGER_SYNC_CYCLE, options),
+  getSyncSummary: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SYNC_SUMMARY),
+  getSyncConflicts: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SYNC_CONFLICTS),
+  resolveSyncConflict: (conflictId: string, resolution: any) =>
+    ipcRenderer.invoke(IPC_CHANNELS.RESOLVE_SYNC_CONFLICT, conflictId, resolution),
 });
 

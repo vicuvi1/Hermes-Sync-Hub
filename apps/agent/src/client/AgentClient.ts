@@ -16,6 +16,11 @@ import {
   ClusterManifest,
   ManifestVerificationResult,
   SafeSnapshotRecord,
+  SyncCycleOptions,
+  SyncCycleResult,
+  DeviceSyncSummary,
+  ConflictItem,
+  ConflictResolution,
 } from '@hermes-hub/types';
 import { DEFAULT_AGENT_PORT } from '../health/AgentServer.js';
 
@@ -292,6 +297,46 @@ export class AgentClient {
     });
     if (!res.ok) {
       throw new Error(`Failed to create safe snapshot: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async triggerSyncCycle(options?: SyncCycleOptions): Promise<SyncCycleResult> {
+    const res = await this.fetchWithTimeout('/sync/cycle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options || {}),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to execute sync cycle: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getSyncSummary(): Promise<DeviceSyncSummary> {
+    const res = await this.fetchWithTimeout('/sync/summary');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch sync summary: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getConflicts(): Promise<ConflictItem[]> {
+    const res = await this.fetchWithTimeout('/sync/conflicts');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch sync conflicts: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async resolveConflict(conflictId: string, resolution: 'use_local' | 'use_remote' | 'keep_both'): Promise<{ success: boolean; message: string }> {
+    const res = await this.fetchWithTimeout('/sync/conflicts/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conflictId, resolution }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to resolve conflict: ${res.status}`);
     }
     return res.json();
   }

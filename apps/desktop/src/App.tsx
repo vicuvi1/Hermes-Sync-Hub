@@ -58,6 +58,10 @@ declare global {
       verifyManifest: () => Promise<any>;
       getSnapshots: () => Promise<any>;
       createSafeSnapshot: (options?: any) => Promise<any>;
+      triggerSyncCycle: (options?: any) => Promise<any>;
+      getSyncSummary: () => Promise<any>;
+      getSyncConflicts: () => Promise<any>;
+      resolveSyncConflict: (conflictId: string, resolution: any) => Promise<any>;
     };
   }
 }
@@ -195,16 +199,40 @@ export const App: React.FC = () => {
 
   const handleSyncNow = async () => {
     setIsSyncing(true);
-    showNotification('Sync cycle started via Syncthing REST API...');
+    showNotification('Safe file-based synchronization cycle started...');
     if (window.hermesHub) {
       try {
-        await window.hermesHub.triggerSync();
-      } catch {}
+        const result = window.hermesHub.triggerSyncCycle
+          ? await window.hermesHub.triggerSyncCycle()
+          : await window.hermesHub.triggerSync();
+
+        const updatedDevices = await window.hermesHub.getDevices();
+        if (updatedDevices && updatedDevices.length > 0) {
+          setDevices(updatedDevices);
+        }
+        if (window.hermesHub.getOverallStats) {
+          const newStats = await window.hermesHub.getOverallStats();
+          setStats(newStats);
+        }
+        const stagedTotal = result?.stagedCounts
+          ? (result.stagedCounts.skills || 0) + (result.stagedCounts.memories || 0) + (result.stagedCounts.configs || 0)
+          : 0;
+        showNotification(
+          stagedTotal > 0
+            ? `Sync completed: ${stagedTotal} files staged & verified ✓`
+            : 'All skills, memories, and configs in-sync ✓'
+        );
+      } catch (err: any) {
+        showNotification(`Sync failed: ${err.message || 'Error during sync'}`);
+      } finally {
+        setIsSyncing(false);
+      }
+    } else {
+      setTimeout(() => {
+        setIsSyncing(false);
+        showNotification('Everything synchronized (simulated) ✓');
+      }, 1200);
     }
-    setTimeout(() => {
-      setIsSyncing(false);
-      showNotification('Everything synchronized ✓');
-    }, 1500);
   };
 
   const handleSyncDevice = (device: Device) => {

@@ -185,6 +185,13 @@ export class DeviceRegistryService {
   }
 
   /**
+   * Returns current local machine device identity
+   */
+  getLocalDevice(): Device {
+    return this.identityService.getLocalDevice();
+  }
+
+  /**
    * Loads devices from persistent file or initializes defaults
    */
   loadDevices(): Device[] {
