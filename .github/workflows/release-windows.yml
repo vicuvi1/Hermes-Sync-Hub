@@ -25,7 +25,23 @@ jobs:
         run: pnpm build
       - name: Test
         run: pnpm test
-      - name: Package and publish installer
-        run: pnpm --filter @hermes-hub/desktop exec electron-builder --win nsis --x64 --publish always
+      - name: Package installer
+        run: pnpm --filter @hermes-hub/desktop exec electron-builder --win nsis --x64 --publish never
+      - name: Publish GitHub release assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --verify-tag --title "Hermes Hub $tag" --notes "Hermes Hub $tag"
+          }
+          $assets = Get-ChildItem release -File | Where-Object { $_.Name -match '\.(exe|blockmap|yml)$' }
+          if ($assets.Count -lt 3) { throw "Expected installer, blockmap, and latest.yml; found $($assets.Count) assets." }
+          foreach ($asset in $assets) {
+            gh release upload $tag $asset.FullName --clobber
+            if ($LASTEXITCODE -ne 0) { throw "Failed to upload $($asset.Name)" }
+          }
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
