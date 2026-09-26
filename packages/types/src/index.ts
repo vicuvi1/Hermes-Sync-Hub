@@ -341,3 +341,62 @@ export interface DeviceComparison {
   syncStatus: 'identical' | 'ahead' | 'behind' | 'diverged';
 }
 
+export interface PairingIssuer {
+  deviceId: string;
+  deviceName: string;
+  hostname: string;
+  os: 'windows' | 'linux' | 'macos';
+  tailscaleIp?: string;
+  syncthingId?: string;
+  agentPort: number;
+}
+
+export interface PairingInvitation {
+  invitationId: string;
+  code: string;
+  encodedPayload: string;
+  issuer: PairingIssuer;
+  token: string;
+  createdAt: string;
+  expiresAt: string;
+  isExpired?: boolean;
+}
+
+export interface PairingValidationResult {
+  valid: boolean;
+  error?: string;
+  invitation?: {
+    code: string;
+    issuer: PairingIssuer;
+    expiresAt: string;
+  };
+}
+
+export interface PairingJoinPayload {
+  codeOrPayload: string;
+  joinerDevice?: Partial<Device>;
+}
+
+export type PairingStepId =
+  | 'validate_token'
+  | 'detect_hermes'
+  | 'syncthing_link'
+  | 'tailscale_verify'
+  | 'registry_enroll'
+  | 'initial_sync';
+
+export interface PairingProgressStep {
+  stepId: PairingStepId;
+  label: string;
+  status: 'pending' | 'in-progress' | 'completed' | 'failed';
+  message?: string;
+  timestamp: string;
+}
+
+export interface PairingExecutionResult {
+  success: boolean;
+  pairedDevice: Device;
+  steps: PairingProgressStep[];
+  error?: string;
+}
+

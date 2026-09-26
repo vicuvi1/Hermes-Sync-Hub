@@ -47,6 +47,10 @@ declare global {
       removeDevice: (id: string) => Promise<boolean>;
       compareDevices: (aId: string, bId: string) => Promise<any>;
       getOverallStats: () => Promise<any>;
+      generatePairingInvitation: () => Promise<any>;
+      getActivePairingInvitation: () => Promise<any>;
+      validatePairingCode: (codeOrPayload: string) => Promise<any>;
+      executePairing: (payload: any) => Promise<any>;
     };
   }
 }

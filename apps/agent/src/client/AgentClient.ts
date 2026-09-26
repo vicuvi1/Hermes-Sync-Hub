@@ -8,6 +8,10 @@ import {
   SyncthingFolder,
   SyncthingConnectionState,
   SyncthingTransferState,
+  PairingInvitation,
+  PairingValidationResult,
+  PairingJoinPayload,
+  PairingExecutionResult,
 } from '@hermes-hub/types';
 import { DEFAULT_AGENT_PORT } from '../health/AgentServer.js';
 
@@ -183,6 +187,47 @@ export class AgentClient {
     const res = await this.fetchWithTimeout('/syncthing/transfer');
     if (!res.ok) {
       throw new Error(`Failed to fetch Syncthing transfer state: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async generatePairingInvitation(): Promise<PairingInvitation> {
+    const res = await this.fetchWithTimeout('/pairing/invitation', { method: 'POST' });
+    if (!res.ok) {
+      throw new Error(`Failed to generate pairing invitation: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getActivePairingInvitation(): Promise<PairingInvitation | null> {
+    const res = await this.fetchWithTimeout('/pairing/invitation/active');
+    if (!res.ok) {
+      throw new Error(`Failed to get active pairing invitation: ${res.status}`);
+    }
+    const data = await res.json();
+    return data.active || null;
+  }
+
+  async validatePairingCode(codeOrPayload: string): Promise<PairingValidationResult> {
+    const res = await this.fetchWithTimeout('/pairing/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codeOrPayload }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to validate pairing code: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async executePairing(payload: PairingJoinPayload): Promise<PairingExecutionResult> {
+    const res = await this.fetchWithTimeout('/pairing/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      throw new Error(`Pairing execution failed: ${res.status}`);
     }
     return res.json();
   }

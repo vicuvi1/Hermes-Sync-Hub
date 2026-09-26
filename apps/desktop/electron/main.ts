@@ -12,6 +12,7 @@ import {
   HermesService,
   TailscaleAdapter,
   SyncthingAdapter,
+  PairingService,
 } from '@hermes-hub/agent';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -24,13 +25,21 @@ const healthMonitor = new HealthMonitorService(deviceIdentity);
 const hermesService = new HermesService();
 const tailscaleAdapter = new TailscaleAdapter();
 const syncthingAdapter = new SyncthingAdapter();
+const pairingService = new PairingService(
+  deviceIdentity,
+  deviceRegistry,
+  tailscaleAdapter,
+  syncthingAdapter,
+  hermesService
+);
 const agentServer = new AgentServer(
   deviceIdentity,
   healthMonitor,
   hermesService,
   tailscaleAdapter,
   syncthingAdapter,
-  deviceRegistry
+  deviceRegistry,
+  pairingService
 );
 
 function createWindow() {
@@ -157,6 +166,22 @@ ipcMain.handle(IPC_CHANNELS.UPDATE_DEVICE, async (_event, deviceId: string, upda
 
 ipcMain.handle(IPC_CHANNELS.COMPARE_DEVICES, async (_event, aId: string, bId: string) => {
   return deviceRegistry.compareDevices(aId, bId);
+});
+
+ipcMain.handle(IPC_CHANNELS.GENERATE_PAIRING_INVITATION, async () => {
+  return pairingService.generateInvitation();
+});
+
+ipcMain.handle(IPC_CHANNELS.GET_ACTIVE_PAIRING_INVITATION, async () => {
+  return pairingService.getActiveInvitation();
+});
+
+ipcMain.handle(IPC_CHANNELS.VALIDATE_PAIRING_CODE, async (_event, codeOrPayload: string) => {
+  return pairingService.validateCodeOrPayload(codeOrPayload);
+});
+
+ipcMain.handle(IPC_CHANNELS.EXECUTE_PAIRING, async (_event, payload: any) => {
+  return pairingService.executePairing(payload);
 });
 
 ipcMain.handle(IPC_CHANNELS.GET_OVERALL_STATS, async () => {

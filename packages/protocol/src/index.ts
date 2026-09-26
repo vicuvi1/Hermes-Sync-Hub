@@ -41,6 +41,12 @@ export const IPC_CHANNELS = {
   REMOVE_DEVICE: 'hermes-hub:remove-device',
   UPDATE_DEVICE: 'hermes-hub:update-device',
   COMPARE_DEVICES: 'hermes-hub:compare-devices',
+
+  // Milestone 7 Pairing Workflow channels
+  GENERATE_PAIRING_INVITATION: 'hermes-hub:generate-pairing-invitation',
+  GET_ACTIVE_PAIRING_INVITATION: 'hermes-hub:get-active-pairing-invitation',
+  VALIDATE_PAIRING_CODE: 'hermes-hub:validate-pairing-code',
+  EXECUTE_PAIRING: 'hermes-hub:execute-pairing',
 } as const;
 
 export interface PairingCodePayload {

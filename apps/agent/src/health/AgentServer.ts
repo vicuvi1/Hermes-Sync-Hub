@@ -5,6 +5,7 @@ import { HealthMonitorService } from './HealthMonitor.js';
 import { HermesService } from '../hermes/HermesAdapter.js';
 import { TailscaleAdapter, ITailscaleAdapter } from '../tailscale/TailscaleAdapter.js';
 import { SyncthingAdapter, ISyncthingAdapter } from '../sync/SyncthingAdapter.js';
+import { PairingService } from '../pairing/PairingService.js';
 
 export const DEFAULT_AGENT_PORT = 48199;
 
@@ -17,6 +18,7 @@ export class AgentServer {
   private hermesService: HermesService;
   private tailscaleAdapter: ITailscaleAdapter;
   private syncthingAdapter: ISyncthingAdapter;
+  private pairingService: PairingService;
 
   constructor(
     identityService?: DeviceIdentityService,
@@ -24,7 +26,8 @@ export class AgentServer {
     hermesService?: HermesService,
     tailscaleAdapter?: ITailscaleAdapter,
     syncthingAdapter?: ISyncthingAdapter,
-    deviceRegistry?: DeviceRegistryService
+    deviceRegistry?: DeviceRegistryService,
+    pairingService?: PairingService
   ) {
     this.identityService = identityService || new DeviceIdentityService();
     this.deviceRegistry = deviceRegistry || new DeviceRegistryService(this.identityService);
@@ -32,6 +35,15 @@ export class AgentServer {
     this.hermesService = hermesService || new HermesService();
     this.tailscaleAdapter = tailscaleAdapter || new TailscaleAdapter();
     this.syncthingAdapter = syncthingAdapter || new SyncthingAdapter();
+    this.pairingService =
+      pairingService ||
+      new PairingService(
+        this.identityService,
+        this.deviceRegistry,
+        this.tailscaleAdapter,
+        this.syncthingAdapter,
+        this.hermesService
+      );
   }
 
   /**
@@ -117,6 +129,59 @@ export class AgentServer {
               res.writeHead(404, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ error: err.message || 'Comparison failed' }));
             }
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/pairing/invitation') {
+            try {
+              const invitation = await this.pairingService.generateInvitation();
+              res.writeHead(201, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify(invitation));
+            } catch (err: any) {
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: err.message }));
+            }
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/pairing/invitation/active') {
+            const active = this.pairingService.getActiveInvitation();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ active }));
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/pairing/validate') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const result = this.pairingService.validateCodeOrPayload(parsed.codeOrPayload || '');
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+              } catch (err: any) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+              }
+            });
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/pairing/execute') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const result = await this.pairingService.executePairing(parsed);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+              } catch (err: any) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+              }
+            });
             return;
           }
 
