@@ -1,6 +1,6 @@
 {
   "name": "@hermes-hub/desktop",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "productName": "Hermes Hub",
   "description": "Local-first control center for Hermes Agent devices",
   "author": "vicuvi1",

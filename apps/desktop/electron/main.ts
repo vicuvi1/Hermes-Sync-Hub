@@ -162,7 +162,8 @@ function createWindow() {
     title: 'Hermes Hub',
     backgroundColor: '#0a0d14',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      // Electron requires an explicit .mjs extension for an ESM preload.
+      preload: path.join(__dirname, 'preload.mjs'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: false,
@@ -176,6 +177,10 @@ function createWindow() {
     if (!settings.minimizeToTray) {
       mainWindow?.show();
     }
+  });
+
+  mainWindow.webContents.on('preload-error', (_event, preloadPath, error) => {
+    appendCrashLog(`preload-error (${preloadPath})`, error);
   });
 
   // Never leave users with an invisible process if the renderer is slow to

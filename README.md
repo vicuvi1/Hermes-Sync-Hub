@@ -371,8 +371,8 @@ Artifacts in `release/` include the installer, `latest.yml`, optional blockmap, 
 3. Create and push the matching annotated tag.
 
 ```powershell
-git tag -a v0.2.3 -m "Hermes Hub v0.2.3"
-git push origin v0.2.3
+git tag -a v0.2.4 -m "Hermes Hub v0.2.4"
+git push origin v0.2.4
 ```
 
 The desktop version and tag must match. Releases are currently unsigned. Never commit signing certificates, keys, or passwords.
