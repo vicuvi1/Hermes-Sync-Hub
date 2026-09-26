@@ -2,6 +2,14 @@
 
 All notable changes are documented here. The project uses semantic version tags.
 
+## 0.6.2 — Real product gallery
+
+- Added release-resolution screenshots captured from the real Hermes Hub Electron renderer.
+- Added an interface preview to both the GitHub README and the bundled in-app handbook.
+- Sanitized Demo Mode device names, hostnames, filesystem paths, network examples, sessions, and activity descriptions before capture.
+- Added responsive image presentation in **Help & README** while retaining descriptive alternative text.
+- Published Overview, Sessions, and Shared Vault views without exposing personal data or credentials.
+
 ## 0.6.1 — Professional project presentation
 
 - Reworked the public README opening around the user problem, product value, trust model, major capabilities, and a five-minute Windows setup.

@@ -15,6 +15,16 @@ Run Hermes with confidence across one or several PCs. Hermes Hub gives you one v
 
 > Hermes Hub is an independent companion project. It does not replace Hermes chat, task execution, or agent behavior; it makes the surrounding installation easier to understand, protect, synchronize, and maintain.
 
+## Interface preview
+
+The screenshots below come directly from Hermes Hub v0.6.2 using its visibly labeled, sanitized Demo Mode. No personal sessions, device identities, filesystem paths, or credentials are shown.
+
+![Hermes Hub overview showing synchronized devices, workspace metrics, recent sessions, and recovery state](https://raw.githubusercontent.com/vicuvi1/Hermes-Sync-Hub/v0.6.2/docs/images/overview.png)
+
+| Sessions workspace | Encrypted Shared Vault |
+|---|---|
+| ![Hermes Hub sessions workspace with search, revision metadata, model usage, and tool history](https://raw.githubusercontent.com/vicuvi1/Hermes-Sync-Hub/v0.6.2/docs/images/sessions.png) | ![Hermes Hub Shared Vault with encrypted credential summaries and environment profiles](https://raw.githubusercontent.com/vicuvi1/Hermes-Sync-Hub/v0.6.2/docs/images/shared-vault.png) |
+
 ## Why Hermes Hub?
 
 A capable local agent quickly becomes more than one executable. It accumulates memories, skills, MCP connections, provider credentials, sessions, backups, and machine-specific configuration. That is manageable on one computer and surprisingly fragile across several.
@@ -61,6 +71,7 @@ This complete handbook is bundled with every Windows release and opens inside th
 ## Table of contents
 
 - [What Hermes Hub does](#what-hermes-hub-does)
+- [Interface preview](#interface-preview)
 - [Why Hermes Hub?](#why-hermes-hub)
 - [At a glance](#at-a-glance)
 - [Five-minute setup](#five-minute-setup)

@@ -9,6 +9,7 @@ build/
 !apps/desktop/build/
 !apps/desktop/build/icon.png
 !apps/desktop/build/icon.svg
+.marketing-capture/
 
 # Environment and Secrets (CRITICAL SECURITY)
 .env

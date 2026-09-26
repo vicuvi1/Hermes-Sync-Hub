@@ -57,6 +57,7 @@ export const HelpView: React.FC = () => {
         table: ({ children }) => <div className="my-5 overflow-x-auto rounded-xl border border-border"><table className="w-full border-collapse text-left text-xs">{children}</table></div>,
         th: ({ children }) => <th className="border-b border-border bg-muted/70 px-3 py-2 font-semibold">{children}</th>,
         td: ({ children }) => <td className="border-b border-border/60 px-3 py-2 align-top text-muted-foreground">{children}</td>,
+        img: ({ src, alt }) => <img src={src} alt={alt || ''} loading="lazy" className="my-4 w-full rounded-xl border border-border shadow-lg" />,
         hr: () => <hr className="my-8 border-border" />,
         strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
       }}>{markdown}</ReactMarkdown>
