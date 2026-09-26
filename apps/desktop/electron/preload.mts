@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
-import type { CreateHermesBotInput, HermesBoosterActionResult, HermesBoosterStatus, ModelPriceInfo, RequirementId, RequirementsInstallResult, RouterExecutionInput, RouterPolicy, RoutingSimulationInput, SavedSearch, SearchIndexStatus, SearchQuery, SearchResult, UpdateHermesMemoryInput, VaultEnvironmentProfile, VaultSetupInput, VaultUnlockInput } from '@hermes-hub/types';
+import type { ConfigureHermesProfileInput, CreateHermesBotInput, HermesBoosterActionResult, HermesBoosterStatus, ModelPriceInfo, RequirementId, RequirementsInstallResult, RouterExecutionInput, RouterPolicy, RoutingSimulationInput, SavedSearch, SearchIndexStatus, SearchQuery, SearchResult, UpdateHermesMemoryInput, VaultEnvironmentProfile, VaultSetupInput, VaultUnlockInput } from '@hermes-hub/types';
 
 // Expose safe, typed API to Renderer process
 contextBridge.exposeInMainWorld('hermesHub', {
@@ -34,6 +34,10 @@ contextBridge.exposeInMainWorld('hermesHub', {
   executeSmartRoute: (input: RouterExecutionInput) => ipcRenderer.invoke(IPC_CHANNELS.EXECUTE_SMART_ROUTE, input),
   refreshRouterCatalog: () => ipcRenderer.invoke(IPC_CHANNELS.REFRESH_ROUTER_CATALOG),
   prepareLocalRouter: (confirmed: boolean) => ipcRenderer.invoke(IPC_CHANNELS.PREPARE_LOCAL_ROUTER, confirmed),
+  testOpenRouterConnection: () => ipcRenderer.invoke(IPC_CHANNELS.TEST_OPENROUTER_CONNECTION),
+  searchOpenRouterModels: (query: string, freeOnly: boolean, toolCapable: boolean) => ipcRenderer.invoke(IPC_CHANNELS.SEARCH_OPENROUTER_MODELS, query, freeOnly, toolCapable),
+  configureHermesProfileRouting: (input: ConfigureHermesProfileInput) => ipcRenderer.invoke(IPC_CHANNELS.CONFIGURE_HERMES_PROFILE_ROUTING, input),
+  testHermesOpenRouter: (profile: string, modelId: string, confirmed: boolean) => ipcRenderer.invoke(IPC_CHANNELS.TEST_HERMES_OPENROUTER, profile, modelId, confirmed),
   getTailscaleState: () => ipcRenderer.invoke(IPC_CHANNELS.GET_TAILSCALE_STATE),
   pingTailscalePeer: (ipOrHost: string) => ipcRenderer.invoke(IPC_CHANNELS.PING_TAILSCALE_PEER, ipOrHost),
   getSyncthingState: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SYNCTHING_STATE),

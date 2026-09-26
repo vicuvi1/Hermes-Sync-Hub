@@ -2,6 +2,16 @@
 
 All notable changes are documented here. The project uses semantic version tags.
 
+## 0.8.0 — Live OpenRouter and Hermes profile routing
+
+- Added an OpenRouter connection center that detects the key in the active Hermes environment and validates it with OpenRouter's authenticated key endpoint without exposing the secret to the renderer or spending model credits.
+- Added live key-tier, usage, limit, and remaining-budget information using only redacted OpenRouter metadata.
+- Added a searchable live OpenRouter model browser with current pricing, free status, context size, tool support, and vision support.
+- Added one-click catalog model import into the local routing-policy draft.
+- Added native Hermes profile configuration for a primary model and ordered provider fallbacks, with a recovery backup before every change.
+- Added an explicit end-to-end test that launches the real Hermes CLI through a selected OpenRouter model and reports latency and redacted output.
+- Verified the real installed Hermes/OpenRouter path on Windows and expanded the suite to 165 passing tests.
+
 ## 0.7.1 — Optional zero-credit semantic routing
 
 - Added an opt-in local semantic classifier powered by the Apache-2.0 Transformers.js runtime and a quantized MiniLM embedding model.

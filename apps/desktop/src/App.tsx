@@ -38,6 +38,7 @@ import {
   AppUpdateProgress,
   BackupRecord,
   CompleteOnboardingInput,
+  ConfigureHermesProfileInput,
   Device,
   HermesFile,
   HermesMemory,
@@ -67,6 +68,9 @@ import {
   HermesBoosterActionResult,
   HermesBoosterStatus,
   HermesBotDefinition,
+  OpenRouterCatalogModel,
+  OpenRouterConnectionState,
+  OpenRouterHermesTestResult,
   SharedVaultStatus,
   VaultEnvironmentProfile,
   VaultSetupInput,
@@ -118,6 +122,10 @@ declare global {
       executeSmartRoute: (input: RouterExecutionInput) => Promise<RouterExecutionRecord>;
       refreshRouterCatalog: () => Promise<SmartRouterState>;
       prepareLocalRouter: (confirmed: boolean) => Promise<SmartRouterState>;
+      testOpenRouterConnection: () => Promise<OpenRouterConnectionState>;
+      searchOpenRouterModels: (query: string, freeOnly: boolean, toolCapable: boolean) => Promise<OpenRouterCatalogModel[]>;
+      configureHermesProfileRouting: (input: ConfigureHermesProfileInput) => Promise<HermesBotDefinition>;
+      testHermesOpenRouter: (profile: string, modelId: string, confirmed: boolean) => Promise<OpenRouterHermesTestResult>;
       getTailscaleState: () => Promise<TailscaleState>;
       pingTailscalePeer: (ipOrHost: string) => Promise<{ success: boolean; latencyMs?: number; via?: string }>;
       getSyncthingState: () => Promise<SyncthingState>;

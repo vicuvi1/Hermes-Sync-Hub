@@ -350,8 +350,53 @@ export interface HermesBotDefinition {
   skills: string[];
   enabled: boolean;
   nativeProfileDetected: boolean;
+  hermesProvider?: string;
+  hermesModel?: string;
+  hermesFallbacks?: string[];
+  hermesConfiguredAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface OpenRouterConnectionState {
+  state: 'not-configured' | 'unchecked' | 'checking' | 'ready' | 'invalid' | 'offline';
+  keyConfigured: boolean;
+  keyLabel?: string;
+  isFreeTier?: boolean;
+  usageUsd?: number;
+  limitUsd?: number;
+  remainingUsd?: number;
+  checkedAt?: string;
+  message: string;
+}
+
+export interface OpenRouterCatalogModel {
+  id: string;
+  name: string;
+  description: string;
+  contextLength: number;
+  promptUsdPerMillion: number;
+  completionUsdPerMillion: number;
+  free: boolean;
+  supportsTools: boolean;
+  supportsVision: boolean;
+  supportedParameters: string[];
+}
+
+export interface ConfigureHermesProfileInput {
+  profile: string;
+  primaryModelId: string;
+  fallbackModelIds: string[];
+  confirmed: boolean;
+}
+
+export interface OpenRouterHermesTestResult {
+  success: boolean;
+  profile: string;
+  model: string;
+  latencyMs: number;
+  output: string;
+  message: string;
 }
 
 export interface CreateHermesBotInput {
@@ -414,6 +459,7 @@ export interface SmartRouterState {
   history: RouterExecutionRecord[];
   today: { spentUsd: number; paidRuns: number; totalRuns: number };
   catalog: { state: 'current' | 'stale' | 'offline'; checkedAt?: string; message: string };
+  openRouter: OpenRouterConnectionState;
   classifier: {
     state: 'disabled' | 'not-downloaded' | 'loading' | 'ready' | 'failed';
     mode: RouterClassifierMode;

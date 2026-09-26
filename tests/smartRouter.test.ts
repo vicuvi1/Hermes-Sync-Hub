@@ -16,7 +16,7 @@ function createService(commands: string[][] = [], runnerOverride?: SmartRouterCo
     }
     return { success: true, output: 'ok' };
   });
-  const hermes = { detect: async () => ({ executablePath: process.execPath }) };
+  const hermes = { detect: async () => ({ executablePath: process.execPath, homePath: directory }) };
   return new SmartRouterService(hermes as never, directory, runner, async () => [], semanticClassifier);
 }
 
@@ -92,6 +92,34 @@ describe('SmartRouterService', () => {
     expect(record.status).toBe('success');
     const command = commands.find((args) => args.includes('-z'));
     expect(command).toEqual(expect.arrayContaining(['-p', 'default', '-z', 'Summarize this note.', '-m', 'nvidia/nemotron-3.5-lightning:free', '--provider', 'openrouter']));
+  });
+
+  it('writes the primary model and ordered fallback chain into a native Hermes profile', async () => {
+    const commands: string[][] = [];
+    const service = createService(commands);
+    await service.getState();
+    const bot = await service.configureHermesProfile({
+      profile: 'default',
+      primaryModelId: 'openrouter:nvidia/nemotron-3.5-lightning:free',
+      fallbackModelIds: ['openrouter:qwen/qwen3.8-27b:free', 'openrouter:deepseek/deepseek-v4-flash'],
+      confirmed: true,
+    });
+    expect(commands).toContainEqual(['-p', 'default', 'config', 'set', 'model.provider', 'openrouter']);
+    expect(commands).toContainEqual(['-p', 'default', 'config', 'set', 'model.default', 'nvidia/nemotron-3.5-lightning:free']);
+    expect(commands).toContainEqual(['-p', 'default', 'config', 'set', 'fallback_providers', JSON.stringify([
+      { provider: 'openrouter', model: 'qwen/qwen3.8-27b:free' },
+      { provider: 'openrouter', model: 'deepseek/deepseek-v4-flash' },
+    ])]);
+    expect(bot.hermesFallbacks).toHaveLength(2);
+  });
+
+  it('runs a live connection test through the selected Hermes profile', async () => {
+    const commands: string[][] = [];
+    const service = createService(commands);
+    await service.getState();
+    const result = await service.testHermesOpenRouter('default', 'openrouter:nvidia/nemotron-3.5-lightning:free', true);
+    expect(result.success).toBe(true);
+    expect(commands).toContainEqual(['-p', 'default', '-z', 'Connection test: reply with exactly HERMES_OPENROUTER_OK.', '-m', 'nvidia/nemotron-3.5-lightning:free', '--provider', 'openrouter']);
   });
 
   it('uses an opt-in local semantic classifier without provider calls and keeps deterministic scoring', async () => {

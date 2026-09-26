@@ -4,7 +4,11 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import type {
   CreateHermesBotInput,
+  ConfigureHermesProfileInput,
   HermesBotDefinition,
+  OpenRouterCatalogModel,
+  OpenRouterConnectionState,
+  OpenRouterHermesTestResult,
   RouterExecutionInput,
   RouterExecutionRecord,
   RouterModel,
@@ -19,7 +23,7 @@ import { redactSecrets } from '@hermes-hub/shared';
 
 type CommandResult = { success: boolean; output: string };
 export type SmartRouterCommandRunner = (args: string[], timeout: number) => Promise<CommandResult>;
-export type RouterCatalogFetcher = () => Promise<Array<{ id: string; name: string; contextLength: number; promptUsdPerMillion: number; completionUsdPerMillion: number }>>;
+export type RouterCatalogFetcher = () => Promise<Array<{ id: string; name: string; contextLength: number; promptUsdPerMillion: number; completionUsdPerMillion: number; description?: string; supportedParameters?: string[]; architectureModality?: string }>>;
 export type LocalSemanticClassifier = (prompt: string) => Promise<{ category: RouterTaskCategory; confidence: number }>;
 
 type StoredRouterData = {
@@ -108,6 +112,8 @@ export class SmartRouterService {
   private semanticPipeline?: (texts: string | string[], options: { pooling: 'mean'; normalize: true }) => Promise<{ tolist(): number[][] }>;
   private semanticPrototypes?: Partial<Record<RouterTaskCategory, number[]>>;
   private classifierState: SmartRouterState['classifier'];
+  private openRouterState: OpenRouterConnectionState = { state: 'unchecked', keyConfigured: false, message: 'Check the Hermes OpenRouter connection before running routed tasks.' };
+  private catalogCache: OpenRouterCatalogModel[] = [];
 
   constructor(
     private readonly hermesService: HermesService,
@@ -170,6 +176,33 @@ export class SmartRouterService {
         resolve({ success: !error, output });
       });
     });
+  }
+
+  private async readOpenRouterKey(): Promise<string | undefined> {
+    const installation = await this.hermesService.detect();
+    if (!installation?.homePath) return undefined;
+    const envPathResult = await this.run(['config', 'env-path'], 15_000).catch(() => ({ success: false, output: '' }));
+    const reportedPath = envPathResult.success ? envPathResult.output.split(/\r?\n/).map((line) => line.trim()).find((line) => path.isAbsolute(line) && fs.existsSync(line)) : undefined;
+    const candidates = Array.from(new Set([reportedPath, path.join(installation.homePath, '.env')].filter((value): value is string => Boolean(value))));
+    for (const candidate of candidates) {
+      try {
+        const line = fs.readFileSync(candidate, 'utf8').split(/\r?\n/).find((entry) => /^\s*(?:export\s+)?OPENROUTER_API_KEY\s*=/.test(entry));
+        if (!line) continue;
+        const raw = line.replace(/^\s*(?:export\s+)?OPENROUTER_API_KEY\s*=\s*/, '').trim();
+        const value = raw.replace(/^(['"])(.*)\1$/, '$2').trim();
+        if (value) return value;
+      } catch {}
+    }
+    return undefined;
+  }
+
+  private async inspectOpenRouterConfiguration(): Promise<void> {
+    const keyConfigured = Boolean(await this.readOpenRouterKey());
+    if (!keyConfigured) {
+      this.openRouterState = { state: 'not-configured', keyConfigured: false, message: 'OPENROUTER_API_KEY is missing from the active Hermes environment. Add it in Shared Vault, then apply that environment to Hermes.' };
+    } else if (!this.openRouterState.keyConfigured || this.openRouterState.state === 'not-configured') {
+      this.openRouterState = { state: 'unchecked', keyConfigured: true, message: 'Hermes has an OpenRouter key. Verify it with OpenRouter before running a task.' };
+    }
   }
 
   private validatePolicy(input: RouterPolicy): RouterPolicy {
@@ -244,6 +277,7 @@ export class SmartRouterService {
   }
 
   async getState(): Promise<SmartRouterState> {
+    await this.inspectOpenRouterConfiguration();
     try {
       const profiles = this.parseProfiles((await this.run(['profile', 'list'], 20_000)).output);
       const known = new Set(this.data.bots.map((bot) => bot.profile));
@@ -254,7 +288,7 @@ export class SmartRouterService {
       this.data.bots = this.data.bots.map((bot) => ({ ...bot, nativeProfileDetected: profiles.includes(bot.profile) || bot.profile === 'default' }));
       this.save();
     } catch {}
-    return { policy: this.data.policy, bots: this.data.bots, history: this.data.history.slice(0, 100), today: this.todayStats(), catalog: this.data.catalog, classifier: this.classifierState };
+    return { policy: this.data.policy, bots: this.data.bots, history: this.data.history.slice(0, 100), today: this.todayStats(), catalog: this.data.catalog, classifier: this.classifierState, openRouter: this.openRouterState };
   }
 
   private classifyDeterministic(input: RoutingSimulationInput): { category: RouterTaskCategory; complexity: number; reasons: string[] } {
@@ -413,14 +447,21 @@ export class SmartRouterService {
     try {
       const response = await fetch('https://openrouter.ai/api/v1/models', { signal: controller.signal, headers: { 'User-Agent': 'Hermes-Hub-Smart-Router' } });
       if (!response.ok) throw new Error(`OpenRouter catalog returned HTTP ${response.status}.`);
-      const payload = await response.json() as { data?: Array<{ id?: string; name?: string; context_length?: number; pricing?: { prompt?: string; completion?: string } }> };
-      return (payload.data || []).filter((item) => item.id).map((item) => ({ id: item.id!, name: item.name || item.id!, contextLength: Number(item.context_length || 0), promptUsdPerMillion: Number(item.pricing?.prompt || 0) * 1_000_000, completionUsdPerMillion: Number(item.pricing?.completion || 0) * 1_000_000 }));
+      const payload = await response.json() as { data?: Array<{ id?: string; name?: string; description?: string; context_length?: number; pricing?: { prompt?: string; completion?: string }; supported_parameters?: string[]; architecture?: { modality?: string } }> };
+      return (payload.data || []).filter((item) => item.id).map((item) => ({ id: item.id!, name: item.name || item.id!, description: item.description || '', contextLength: Number(item.context_length || 0), promptUsdPerMillion: Number(item.pricing?.prompt || 0) * 1_000_000, completionUsdPerMillion: Number(item.pricing?.completion || 0) * 1_000_000, supportedParameters: item.supported_parameters || [], architectureModality: item.architecture?.modality || '' }));
     } finally { clearTimeout(timer); }
   }
 
   async refreshCatalog(): Promise<SmartRouterState> {
     try {
       const entries = await this.fetchCatalog();
+      this.catalogCache = entries.map((entry) => ({
+        id: entry.id, name: entry.name, description: entry.description || '', contextLength: entry.contextLength,
+        promptUsdPerMillion: entry.promptUsdPerMillion, completionUsdPerMillion: entry.completionUsdPerMillion,
+        free: entry.promptUsdPerMillion === 0 && entry.completionUsdPerMillion === 0,
+        supportsTools: Boolean(entry.supportedParameters?.includes('tools') || entry.supportedParameters?.includes('tool_choice')),
+        supportsVision: /image/i.test(entry.architectureModality || ''), supportedParameters: entry.supportedParameters || [],
+      }));
       const lookup = new Map(entries.map((entry) => [entry.id.toLowerCase(), entry]));
       const checkedAt = now();
       this.data.policy.models = this.data.policy.models.map((model) => {
@@ -438,6 +479,83 @@ export class SmartRouterService {
       this.save();
     }
     return this.getState();
+  }
+
+  async testOpenRouterConnection(): Promise<OpenRouterConnectionState> {
+    const apiKey = await this.readOpenRouterKey();
+    if (!apiKey) {
+      this.openRouterState = { state: 'not-configured', keyConfigured: false, checkedAt: now(), message: 'OPENROUTER_API_KEY is not configured in Hermes.' };
+      return this.openRouterState;
+    }
+    this.openRouterState = { state: 'checking', keyConfigured: true, message: 'Verifying the Hermes key with OpenRouter…' };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15_000);
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/key', { signal: controller.signal, headers: { Authorization: `Bearer ${apiKey}`, 'User-Agent': 'Hermes-Hub-Smart-Router' } });
+      const payload = await response.json().catch(() => ({})) as { data?: { label?: string; is_free_tier?: boolean; usage?: number; limit?: number | null; limit_remaining?: number | null } };
+      if (!response.ok) {
+        this.openRouterState = { state: response.status === 401 || response.status === 403 ? 'invalid' : 'offline', keyConfigured: true, checkedAt: now(), message: response.status === 401 || response.status === 403 ? 'OpenRouter rejected the key stored in Hermes.' : `OpenRouter connection check returned HTTP ${response.status}.` };
+        return this.openRouterState;
+      }
+      const details = payload.data || {};
+      this.openRouterState = {
+        state: 'ready', keyConfigured: true, keyLabel: details.label ? redactSecrets(String(details.label)).slice(0, 80) : undefined,
+        isFreeTier: details.is_free_tier, usageUsd: Number.isFinite(Number(details.usage)) ? Number(details.usage) : undefined,
+        limitUsd: details.limit == null ? undefined : Number(details.limit), remainingUsd: details.limit_remaining == null ? undefined : Number(details.limit_remaining),
+        checkedAt: now(), message: 'OpenRouter accepted the key stored in Hermes. No key value was exposed to the UI.',
+      };
+    } catch (error) {
+      this.openRouterState = { state: 'offline', keyConfigured: true, checkedAt: now(), message: error instanceof Error ? `OpenRouter could not be reached: ${error.message}` : 'OpenRouter could not be reached.' };
+    } finally { clearTimeout(timer); }
+    return this.openRouterState;
+  }
+
+  async searchOpenRouterModels(query = '', freeOnly = false, toolCapable = false): Promise<OpenRouterCatalogModel[]> {
+    if (!this.catalogCache.length) await this.refreshCatalog();
+    const needle = query.trim().toLowerCase();
+    return this.catalogCache
+      .filter((model) => (!freeOnly || model.free) && (!toolCapable || model.supportsTools) && (!needle || `${model.id} ${model.name} ${model.description}`.toLowerCase().includes(needle)))
+      .sort((left, right) => Number(right.free) - Number(left.free) || left.promptUsdPerMillion - right.promptUsdPerMillion || left.name.localeCompare(right.name))
+      .slice(0, 100);
+  }
+
+  async configureHermesProfile(input: ConfigureHermesProfileInput): Promise<HermesBotDefinition> {
+    if (input.confirmed !== true) throw new Error('Changing a Hermes profile requires explicit confirmation.');
+    const profile = String(input.profile || '').trim().toLowerCase();
+    if (!PROFILE_ID.test(profile)) throw new Error('Select a valid Hermes profile.');
+    const bot = this.data.bots.find((item) => item.profile === profile);
+    if (!bot?.nativeProfileDetected) throw new Error('The selected Hermes profile is unavailable.');
+    const primary = this.data.policy.models.find((model) => model.id === input.primaryModelId && model.enabled);
+    if (!primary) throw new Error('Select an enabled primary model from the routing policy.');
+    const fallbacks = Array.from(new Set(input.fallbackModelIds || []))
+      .map((id) => this.data.policy.models.find((model) => model.id === id && model.enabled))
+      .filter((model): model is RouterModel => Boolean(model) && model!.id !== primary.id)
+      .slice(0, 8);
+    const unsafePaid = [primary, ...fallbacks].find((model) => model.class === 'paid' && !model.approvedForPaidUse);
+    if (unsafePaid) throw new Error(`${unsafePaid.label} is paid and has not been explicitly approved.`);
+    const providerResult = await this.run(['-p', profile, 'config', 'set', 'model.provider', primary.provider], 30_000);
+    const modelResult = await this.run(['-p', profile, 'config', 'set', 'model.default', primary.model], 30_000);
+    const fallbackValue = JSON.stringify(fallbacks.map((model) => ({ provider: model.provider, model: model.model })));
+    const fallbackResult = await this.run(['-p', profile, 'config', 'set', 'fallback_providers', fallbackValue], 30_000);
+    if (!providerResult.success || !modelResult.success || !fallbackResult.success) throw new Error(`Hermes profile configuration failed. ${providerResult.output} ${modelResult.output} ${fallbackResult.output}`.trim());
+    bot.hermesProvider = primary.provider;
+    bot.hermesModel = primary.model;
+    bot.hermesFallbacks = fallbacks.map((model) => `${model.provider}:${model.model}`);
+    bot.hermesConfiguredAt = now();
+    bot.updatedAt = now();
+    this.save();
+    return bot;
+  }
+
+  async testHermesOpenRouter(profile: string, modelId: string, confirmed: boolean): Promise<OpenRouterHermesTestResult> {
+    if (confirmed !== true) throw new Error('A live Hermes/OpenRouter test requires explicit confirmation.');
+    const bot = this.data.bots.find((item) => item.profile === profile && item.nativeProfileDetected);
+    const model = this.data.policy.models.find((item) => item.id === modelId && item.enabled);
+    if (!bot || !model || model.provider !== 'openrouter') throw new Error('Select a detected Hermes profile and an enabled OpenRouter model.');
+    if (model.class === 'paid' && !model.approvedForPaidUse) throw new Error('This paid model is not approved.');
+    const started = Date.now();
+    const result = await this.run(['-p', profile, '-z', 'Connection test: reply with exactly HERMES_OPENROUTER_OK.', '-m', model.model, '--provider', 'openrouter'], 3 * 60_000);
+    return { success: result.success, profile, model: model.model, latencyMs: Date.now() - started, output: result.output.slice(0, 4000), message: result.success ? 'Hermes successfully completed a live request through OpenRouter.' : 'Hermes could not complete the OpenRouter request.' };
   }
 
   async execute(input: RouterExecutionInput): Promise<RouterExecutionRecord> {

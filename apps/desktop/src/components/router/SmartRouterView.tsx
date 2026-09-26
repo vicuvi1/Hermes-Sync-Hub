@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Activity, Bot, BrainCircuit, CheckCircle2, Coins, Gauge, History, LoaderCircle, Play,
-  Plus, RefreshCw, Route, Save, ShieldCheck, Sparkles, XCircle,
+  Activity, Bot, BrainCircuit, CheckCircle2, Coins, Gauge, History, KeyRound, LoaderCircle, Network, Play,
+  Plus, RefreshCw, Route, Save, Search, ShieldCheck, Sparkles, TestTube2, XCircle,
 } from 'lucide-react';
 import type {
-  CreateHermesBotInput, RouterExecutionRecord, RouterModel, RouterPolicy, RouterTaskCategory,
+  CreateHermesBotInput, OpenRouterCatalogModel, OpenRouterHermesTestResult, RouterExecutionRecord, RouterModel, RouterPolicy, RouterTaskCategory,
   RoutingDecision, RoutingSimulationInput, SmartRouterState,
 } from '@hermes-hub/types';
 
-type Tab = 'overview' | 'bots' | 'models' | 'rules' | 'simulator' | 'history';
+type Tab = 'overview' | 'connection' | 'bots' | 'models' | 'rules' | 'simulator' | 'history';
 const categories: RouterTaskCategory[] = ['general', 'coding', 'research', 'writing', 'analysis', 'vision', 'tool-use'];
 
 const money = (value: number) => `$${value.toFixed(value < 0.01 ? 4 : 2)}`;
@@ -26,6 +26,12 @@ export const SmartRouterView: React.FC = () => {
   const [task, setTask] = useState<RoutingSimulationInput>({ prompt: '', botId: 'default', fileCount: 0, estimatedContextTokens: 0, requiresTools: false, requiresVision: false });
   const [botForm, setBotForm] = useState<CreateHermesBotInput>({ profile: '', name: '', description: '', defaultPoolId: '', skills: [], cloneFrom: 'default' });
   const [modelForm, setModelForm] = useState({ provider: 'openrouter', model: '', label: '', prompt: '0', completion: '0', context: '131072' });
+  const [catalogModels, setCatalogModels] = useState<OpenRouterCatalogModel[]>([]);
+  const [catalogQuery, setCatalogQuery] = useState('');
+  const [catalogFreeOnly, setCatalogFreeOnly] = useState(true);
+  const [catalogToolsOnly, setCatalogToolsOnly] = useState(false);
+  const [profileSetup, setProfileSetup] = useState({ profile: 'default', primaryModelId: '', fallbackModelIds: [] as string[] });
+  const [connectionTest, setConnectionTest] = useState<OpenRouterHermesTestResult | null>(null);
 
   const load = async () => {
     setBusy('load'); setError('');
@@ -34,6 +40,7 @@ export const SmartRouterView: React.FC = () => {
       const next = await window.hermesHub.getSmartRouterState();
       setState(next); setDraft(structuredClone(next.policy));
       setBotForm((current) => ({ ...current, defaultPoolId: current.defaultPoolId || next.policy.pools[0]?.id || '' }));
+      setProfileSetup((current) => ({ ...current, profile: next.bots.some((bot) => bot.profile === current.profile) ? current.profile : next.bots[0]?.profile || 'default', primaryModelId: current.primaryModelId || next.policy.models.find((model) => model.enabled && model.provider === 'openrouter')?.id || '' }));
     } catch (reason: any) { setError(reason?.message || 'Unable to load Smart Router.'); }
     finally { setBusy(''); }
   };
@@ -55,6 +62,56 @@ export const SmartRouterView: React.FC = () => {
     setBusy('catalog'); setError('');
     try { const next = await window.hermesHub.refreshRouterCatalog(); setState(next); setDraft(structuredClone(next.policy)); setNotice(next.catalog.message); }
     catch (reason: any) { setError(reason?.message || 'Catalog refresh failed.'); }
+    finally { setBusy(''); }
+  };
+
+  const verifyOpenRouter = async () => {
+    if (!window.hermesHub) return;
+    setBusy('openrouter'); setError(''); setNotice('');
+    try {
+      const openRouter = await window.hermesHub.testOpenRouterConnection();
+      setState((current) => current ? { ...current, openRouter } : current);
+      setNotice(openRouter.message);
+    } catch (reason: any) { setError(reason?.message || 'OpenRouter could not be verified.'); }
+    finally { setBusy(''); }
+  };
+
+  const searchCatalog = async () => {
+    if (!window.hermesHub) return;
+    setBusy('model-search'); setError('');
+    try { setCatalogModels(await window.hermesHub.searchOpenRouterModels(catalogQuery, catalogFreeOnly, catalogToolsOnly)); }
+    catch (reason: any) { setError(reason?.message || 'OpenRouter models could not be loaded.'); }
+    finally { setBusy(''); }
+  };
+
+  const addCatalogModel = (entry: OpenRouterCatalogModel) => {
+    if (!draft) return;
+    const id = `openrouter:${entry.id}`;
+    if (draft.models.some((model) => model.id === id)) { setNotice(`${entry.name} is already in your policy.`); return; }
+    setDraft({ ...draft, models: [...draft.models, { id, provider: 'openrouter', model: entry.id, label: entry.name, class: entry.free ? 'free' : 'paid', enabled: true, approvedForPaidUse: false, contextLength: entry.contextLength, promptUsdPerMillion: entry.promptUsdPerMillion, completionUsdPerMillion: entry.completionUsdPerMillion, capabilities: ['text', ...(entry.supportsTools ? ['tools' as const] : []), ...(entry.supportsVision ? ['vision' as const] : []), ...(entry.contextLength >= 128_000 ? ['long-context' as const] : [])], catalogCheckedAt: new Date().toISOString() }] });
+    setNotice(`${entry.name} added to the policy draft. Add it to a pool, then save.`);
+  };
+
+  const configureProfile = async () => {
+    if (!window.hermesHub || !profileSetup.primaryModelId) return;
+    const primary = draft?.models.find((model) => model.id === profileSetup.primaryModelId);
+    if (!window.confirm(`Apply ${primary?.label || 'this model'} and ${profileSetup.fallbackModelIds.length} fallback(s) to Hermes profile “${profileSetup.profile}”?\n\nA recovery backup will be created first.`)) return;
+    setBusy('profile-config'); setError(''); setConnectionTest(null);
+    try {
+      const bot = await window.hermesHub.configureHermesProfileRouting({ ...profileSetup, confirmed: true });
+      setState((current) => current ? { ...current, bots: current.bots.map((item) => item.id === bot.id ? bot : item) } : current);
+      setNotice(`Hermes profile ${bot.profile} now uses ${bot.hermesModel} with ${bot.hermesFallbacks?.length || 0} fallback(s).`);
+    } catch (reason: any) { setError(reason?.message || 'Hermes profile routing could not be updated.'); }
+    finally { setBusy(''); }
+  };
+
+  const testHermesConnection = async () => {
+    if (!window.hermesHub || !profileSetup.primaryModelId) return;
+    const model = draft?.models.find((item) => item.id === profileSetup.primaryModelId);
+    if (!window.confirm(`Send one tiny live test through Hermes using ${model?.label || 'the selected model'}?\n\nFree models spend no money but do use OpenRouter request quota. Paid models may incur a very small charge.`)) return;
+    setBusy('hermes-test'); setError(''); setConnectionTest(null);
+    try { const result = await window.hermesHub.testHermesOpenRouter(profileSetup.profile, profileSetup.primaryModelId, true); setConnectionTest(result); setNotice(result.message); }
+    catch (reason: any) { setError(reason?.message || 'The live Hermes/OpenRouter test failed.'); }
     finally { setBusy(''); }
   };
 
@@ -134,7 +191,7 @@ export const SmartRouterView: React.FC = () => {
   if (!state || !draft) return <div className="flex min-h-[55vh] items-center justify-center text-sm text-muted-foreground"><LoaderCircle className="mr-2 h-5 w-5 animate-spin" />Loading Smart Router…</div>;
 
   const tabs: Array<{ id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-    { id: 'overview', label: 'Overview', icon: Gauge }, { id: 'bots', label: 'Bots', icon: Bot }, { id: 'models', label: 'Models & pools', icon: Coins },
+    { id: 'overview', label: 'Overview', icon: Gauge }, { id: 'connection', label: 'OpenRouter live', icon: Network }, { id: 'bots', label: 'Bots', icon: Bot }, { id: 'models', label: 'Models & pools', icon: Coins },
     { id: 'rules', label: 'Routing logic', icon: Route }, { id: 'simulator', label: 'Simulator', icon: Play }, { id: 'history', label: 'History', icon: History },
   ];
 
@@ -146,6 +203,31 @@ export const SmartRouterView: React.FC = () => {
     {(error || notice) && <div className={`rounded-xl border px-4 py-3 text-xs ${error ? 'border-rose-500/25 bg-rose-500/10 text-rose-400' : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-400'}`}>{error || notice}</div>}
 
     <nav className="flex gap-1 overflow-x-auto rounded-2xl border border-border bg-card p-1.5">{tabs.map(({ id, label, icon: Icon }) => <button key={id} onClick={() => setTab(id)} className={`flex min-w-fit items-center gap-2 rounded-xl px-3.5 py-2.5 text-xs font-semibold transition ${tab === id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}><Icon className="h-4 w-4" />{label}</button>)}</nav>
+
+    {tab === 'connection' && <div className="space-y-5">
+      <div className="grid gap-4 xl:grid-cols-[.8fr_1.2fr]">
+        <section className="rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-start justify-between gap-3"><div className="flex gap-3"><span className="rounded-xl bg-primary/10 p-2.5 text-primary"><KeyRound className="h-5 w-5" /></span><div><h3 className="font-bold">OpenRouter connection</h3><p className="mt-1 text-xs text-muted-foreground">Uses the key already stored in Hermes. The renderer never receives it.</p></div></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${state.openRouter.state === 'ready' ? 'bg-emerald-500/10 text-emerald-500' : state.openRouter.state === 'invalid' || state.openRouter.state === 'not-configured' ? 'bg-rose-500/10 text-rose-400' : 'bg-amber-500/10 text-amber-500'}`}>{state.openRouter.state}</span></div>
+          <p className="mt-4 rounded-xl bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">{state.openRouter.message}</p>
+          {state.openRouter.state === 'ready' && <div className="mt-4 grid grid-cols-2 gap-3"><DecisionMetric label="Tier" value={state.openRouter.isFreeTier ? 'Free' : 'Funded'} /><DecisionMetric label="Remaining" value={state.openRouter.remainingUsd == null ? 'No fixed limit' : money(state.openRouter.remainingUsd)} /><DecisionMetric label="Usage" value={state.openRouter.usageUsd == null ? 'Unknown' : money(state.openRouter.usageUsd)} /><DecisionMetric label="Key" value={state.openRouter.keyLabel || 'Verified'} /></div>}
+          <button onClick={() => void verifyOpenRouter()} disabled={Boolean(busy)} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground disabled:opacity-50">{busy === 'openrouter' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}Verify without spending credits</button>
+          {state.openRouter.state === 'not-configured' && <p className="mt-3 text-xs leading-5 text-amber-400">Open Shared Vault, save OPENROUTER_API_KEY in an environment profile, and use “Apply to Hermes.” Then return here and verify.</p>}
+        </section>
+
+        <section className="rounded-2xl border border-border bg-card p-5">
+          <div className="flex items-center gap-2"><Bot className="h-5 w-5 text-primary" /><h3 className="font-bold">Connect routing to a real Hermes profile</h3></div><p className="mt-1 text-xs leading-5 text-muted-foreground">Writes the primary model and ordered fallback chain into Hermes itself. Hermes remains the runtime even when Hub is closed.</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2"><label className="block text-xs font-semibold">Hermes profile<select value={profileSetup.profile} onChange={(event) => setProfileSetup({ ...profileSetup, profile: event.target.value })} className="mt-1.5 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm">{state.bots.filter((bot) => bot.nativeProfileDetected).map((bot) => <option key={bot.id} value={bot.profile}>{bot.name} · {bot.profile}</option>)}</select></label><label className="block text-xs font-semibold">Primary model<select value={profileSetup.primaryModelId} onChange={(event) => setProfileSetup({ ...profileSetup, primaryModelId: event.target.value, fallbackModelIds: profileSetup.fallbackModelIds.filter((id) => id !== event.target.value) })} className="mt-1.5 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm">{draft.models.filter((model) => model.enabled && model.provider === 'openrouter').map((model) => <option key={model.id} value={model.id}>{model.label} · {model.class}</option>)}</select></label></div>
+          <div className="mt-4"><p className="text-xs font-semibold">Ordered fallback models</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{draft.models.filter((model) => model.enabled && model.provider === 'openrouter' && model.id !== profileSetup.primaryModelId && (model.class === 'free' || model.approvedForPaidUse)).map((model) => <label key={model.id} className="flex cursor-pointer items-center gap-2 rounded-xl border border-border bg-background p-3 text-xs"><input type="checkbox" checked={profileSetup.fallbackModelIds.includes(model.id)} onChange={(event) => setProfileSetup({ ...profileSetup, fallbackModelIds: event.target.checked ? [...profileSetup.fallbackModelIds, model.id] : profileSetup.fallbackModelIds.filter((id) => id !== model.id) })} /><span className="min-w-0"><span className="block truncate font-semibold">{model.label}</span><span className="text-[10px] text-muted-foreground">{model.class} · {model.model}</span></span></label>)}</div></div>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row"><button onClick={() => void configureProfile()} disabled={!profileSetup.primaryModelId || Boolean(busy)} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground disabled:opacity-50">{busy === 'profile-config' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Apply to Hermes</button><button onClick={() => void testHermesConnection()} disabled={!profileSetup.primaryModelId || Boolean(busy)} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-3 text-sm font-bold disabled:opacity-50">{busy === 'hermes-test' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <TestTube2 className="h-4 w-4" />}Run live test</button></div>
+          {connectionTest && <div className={`mt-4 rounded-xl border p-3 text-xs ${connectionTest.success ? 'border-emerald-500/25 bg-emerald-500/10' : 'border-rose-500/25 bg-rose-500/10'}`}><div className="flex items-center gap-2 font-bold">{connectionTest.success ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-rose-400" />}{connectionTest.message}<span className="ml-auto font-mono text-muted-foreground">{connectionTest.latencyMs} ms</span></div><pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap text-[11px] text-muted-foreground">{connectionTest.output}</pre></div>}
+        </section>
+      </div>
+
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end"><div className="flex-1"><h3 className="font-bold">Live OpenRouter model browser</h3><p className="mt-1 text-xs text-muted-foreground">Search the current public catalog, inspect real pricing and capabilities, then add a model without copying IDs by hand.</p><label className="relative mt-3 block"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><input value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void searchCatalog(); }} placeholder="Search model name, provider, or capability…" className="h-10 w-full rounded-xl border border-input bg-background pl-10 pr-3 text-sm outline-none focus:border-primary" /></label></div><div className="flex flex-wrap items-center gap-3"><Toggle label="Free only" checked={catalogFreeOnly} onChange={setCatalogFreeOnly} /><Toggle label="Tools" checked={catalogToolsOnly} onChange={setCatalogToolsOnly} /><button onClick={() => void searchCatalog()} disabled={Boolean(busy)} className="inline-flex h-10 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground disabled:opacity-50">{busy === 'model-search' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}Search</button></div></div>
+        {catalogModels.length > 0 ? <div className="mt-4 grid gap-3 lg:grid-cols-2">{catalogModels.map((model) => <article key={model.id} className="rounded-xl border border-border bg-background p-4"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h4 className="truncate font-semibold">{model.name}</h4><p className="truncate font-mono text-[10px] text-primary">{model.id}</p></div><button onClick={() => addCatalogModel(model)} className="shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-[10px] font-bold hover:bg-muted"><Plus className="mr-1 inline h-3 w-3" />Add</button></div><p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">{model.description || 'No description supplied by OpenRouter.'}</p><div className="mt-3 flex flex-wrap gap-1.5 text-[10px]"><span className={`rounded px-2 py-1 ${model.free ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>{model.free ? 'FREE' : `${money(model.promptUsdPerMillion)}/M in`}</span><span className="rounded bg-muted px-2 py-1">{Math.round(model.contextLength / 1000)}K context</span>{model.supportsTools && <span className="rounded bg-blue-500/10 px-2 py-1 text-blue-400">TOOLS</span>}{model.supportsVision && <span className="rounded bg-violet-500/10 px-2 py-1 text-violet-400">VISION</span>}</div></article>)}</div> : <div className="mt-4 rounded-xl border border-dashed border-border py-10 text-center text-xs text-muted-foreground">Search the live catalog to discover models.</div>}
+      </section>
+    </div>}
 
     {tab === 'overview' && <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"><Metric label="Hermes bots" value={state.bots.length} detail={`${state.bots.filter((bot) => bot.nativeProfileDetected).length} detected`} /><Metric label="Free models" value={freeModels} detail="enabled routes" /><Metric label="Approved paid" value={approvedPaid} detail="fail-closed allowlist" /><Metric label="Spent today" value={money(state.today.spentUsd)} detail={`${state.today.paidRuns} paid run(s)`} /><Metric label="Daily limit" value={money(draft.budget.maxUsdPerDay)} detail={`${draft.budget.maxPaidRunsPerDay} paid runs max`} /></div>

@@ -7,6 +7,7 @@ import { IPC_CHANNELS } from '@hermes-hub/protocol';
 import {
   AppLocation,
   CompleteOnboardingInput,
+  ConfigureHermesProfileInput,
   CreateHermesBotInput,
   Device,
   HermesCredentialBridgeResult,
@@ -547,6 +548,26 @@ ipcMain.handle(IPC_CHANNELS.PREPARE_LOCAL_ROUTER, async (_event, confirmed: unkn
   const state = await smartRouterService.prepareLocalClassifier();
   activityService.record({ type: 'settings_changed', title: 'Local semantic router prepared', description: `${state.classifier.model} is cached locally and ready without API credits.`, sourceDevice: deviceIdentity.getLocalDevice().deviceName, status: 'success' });
   return state;
+});
+ipcMain.handle(IPC_CHANNELS.TEST_OPENROUTER_CONNECTION, async () => smartRouterService.testOpenRouterConnection());
+ipcMain.handle(IPC_CHANNELS.SEARCH_OPENROUTER_MODELS, async (_event, query: unknown, freeOnly: unknown, toolCapable: unknown) => {
+  if (typeof query !== 'string' || query.length > 200) throw new Error('Enter a shorter model search.');
+  return smartRouterService.searchOpenRouterModels(query, freeOnly === true, toolCapable === true);
+});
+ipcMain.handle(IPC_CHANNELS.CONFIGURE_HERMES_PROFILE_ROUTING, async (_event, input: unknown) => {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Hermes profile routing details are required.');
+  const request = input as ConfigureHermesProfileInput;
+  if (request.confirmed !== true) throw new Error('Changing Hermes profile routing requires explicit confirmation.');
+  const backup = await backupService.createBackup({ name: `Before routing profile ${String(request.profile).slice(0, 31)}`, notes: 'Automatic recovery backup before changing Hermes model and fallback configuration.' });
+  const bot = await smartRouterService.configureHermesProfile(request);
+  activityService.record({ type: 'settings_changed', title: 'Hermes routing profile updated', description: `${bot.profile} now uses ${bot.hermesModel} with ${bot.hermesFallbacks?.length || 0} fallback(s). Recovery backup: ${backup.id}.`, sourceDevice: deviceIdentity.getLocalDevice().deviceName, status: 'success' });
+  return bot;
+});
+ipcMain.handle(IPC_CHANNELS.TEST_HERMES_OPENROUTER, async (_event, profile: unknown, modelId: unknown, confirmed: unknown) => {
+  if (typeof profile !== 'string' || typeof modelId !== 'string' || confirmed !== true) throw new Error('A profile, model, and explicit confirmation are required.');
+  const result = await smartRouterService.testHermesOpenRouter(profile, modelId, true);
+  activityService.record({ type: 'task_routed', title: 'Hermes/OpenRouter connection tested', description: `${profile} · ${result.model} · ${result.success ? 'success' : 'failed'} · ${result.latencyMs} ms.`, sourceDevice: deviceIdentity.getLocalDevice().deviceName, status: result.success ? 'success' : 'error' });
+  return result;
 });
 
 ipcMain.handle(IPC_CHANNELS.GET_TAILSCALE_STATE, async () => {
