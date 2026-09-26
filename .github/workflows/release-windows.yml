@@ -46,7 +46,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --verify-tag --title "Hermes Hub $tag" --notes "Hermes Hub $tag"
           }
-          $assets = Get-ChildItem release -File | Where-Object { $_.Name -match '\.(exe|blockmap|yml|txt|json)$' }
+          $assets = Get-ChildItem release -File | Where-Object { $_.Name -match '\.(exe|blockmap|txt|json)$' -or $_.Name -eq 'latest.yml' }
           if ($assets.Count -lt 5) { throw "Expected installer, update metadata, checksums, and SBOM; found $($assets.Count) assets." }
           foreach ($asset in $assets) {
             gh release upload $tag $asset.FullName --clobber
