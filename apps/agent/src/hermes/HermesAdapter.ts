@@ -2,14 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import crypto from 'node:crypto';
 import {
   HermesSession,
   HermesMemory,
+  UpdateHermesMemoryInput,
   HermesSkill,
   HermesFile,
   DeviceHermesState,
 } from '@hermes-hub/types';
-import { simpleSha256 } from '@hermes-hub/shared';
 import { HermesDiscoveryService } from '../discovery/HermesDiscovery.js';
 
 const execFileAsync = promisify(execFile);
@@ -46,6 +47,7 @@ export interface IHermesService {
   getStatus(): Promise<HermesStatus>;
   getSessions(): Promise<HermesSession[]>;
   getMemories(): Promise<HermesMemory[]>;
+  updateMemory(input: UpdateHermesMemoryInput): Promise<HermesMemory>;
   getSkills(): Promise<HermesSkill[]>;
   getConfigFiles(): Promise<HermesFile[]>;
 }
@@ -323,16 +325,34 @@ export class HermesService implements IHermesService {
           if (!stat.isDirectory()) continue;
 
           let fileCount = 0;
-          try {
-            fileCount = fs.readdirSync(fullDir).length;
-          } catch {}
+          let latestModified = stat.mtimeMs;
+          const pending = [fullDir];
+          while (pending.length) {
+            const directory = pending.pop()!;
+            for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+              const entryPath = path.join(directory, entry.name);
+              if (entry.isDirectory()) pending.push(entryPath);
+              else if (entry.isFile()) {
+                fileCount += 1;
+                try { latestModified = Math.max(latestModified, fs.statSync(entryPath).mtimeMs); } catch {}
+              }
+            }
+          }
+
+          let description = `Hermes Agent capability module located in skills/${dirName}`;
+          const skillReadme = ['SKILL.md', 'README.md'].map((name) => path.join(fullDir, name)).find((file) => fs.existsSync(file));
+          if (skillReadme) {
+            const text = fs.readFileSync(skillReadme, 'utf-8');
+            const summary = text.split(/\r?\n/).map((line) => line.trim()).find((line) => line && !line.startsWith('#') && !line.startsWith('---'));
+            if (summary) description = summary.slice(0, 240);
+          }
 
           results.push({
             id: `skill-${idx++}`,
             name: dirName.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-            description: `Hermes Agent capability module located in skills/${dirName}`,
+            description,
             filesCount: fileCount,
-            lastModified: new Date(stat.mtimeMs).toISOString(),
+            lastModified: new Date(latestModified).toISOString(),
             originDevice: 'local',
             originDeviceName: 'Local Machine',
             revision: 1,
@@ -354,21 +374,38 @@ export class HermesService implements IHermesService {
     if (!install) return [];
 
     const results: HermesMemory[] = [];
-    const soulFile = path.join(install.homePath, 'SOUL.md');
+    const candidates: string[] = [];
+    for (const rootName of ['SOUL.md', 'MEMORY.md']) {
+      const candidate = path.join(install.homePath, rootName);
+      if (fs.existsSync(candidate)) candidates.push(candidate);
+    }
+    const memoriesDirectory = path.join(install.homePath, 'memories');
+    if (fs.existsSync(memoriesDirectory)) {
+      const pending = [memoriesDirectory];
+      while (pending.length) {
+        const directory = pending.pop()!;
+        for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+          const entryPath = path.join(directory, entry.name);
+          if (entry.isDirectory()) pending.push(entryPath);
+          else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) candidates.push(entryPath);
+        }
+      }
+    }
 
-    if (fs.existsSync(soulFile)) {
+    for (const memoryPath of candidates) {
       try {
-        const stat = fs.statSync(soulFile);
-        const content = fs.readFileSync(soulFile, 'utf-8');
+        const stat = fs.statSync(memoryPath);
+        if (stat.size > 2 * 1024 * 1024) continue;
+        const relative = path.relative(install.homePath, memoryPath).replace(/\\/g, '/');
         results.push({
-          id: 'mem-soul',
-          title: 'SOUL.md',
-          path: soulFile,
+          id: relative === 'SOUL.md' ? 'mem-soul' : `mem-${crypto.createHash('sha256').update(relative).digest('hex').slice(0, 16)}`,
+          title: relative,
+          path: memoryPath,
           updatedAt: new Date(stat.mtimeMs).toISOString(),
           originDevice: 'local',
           originDeviceName: 'Local Machine',
           revision: 1,
-          content,
+          content: fs.readFileSync(memoryPath, 'utf-8'),
           devicesWithRevision: ['local'],
           isLatest: true,
         });
@@ -376,6 +413,39 @@ export class HermesService implements IHermesService {
     }
 
     return results;
+  }
+
+  /**
+   * Updates a discovered Hermes Markdown memory using an atomic replacement.
+   * The caller must create a recovery artifact before invoking this method.
+   */
+  async updateMemory(input: UpdateHermesMemoryInput): Promise<HermesMemory> {
+    const install = await this.detect();
+    if (!install) throw new Error('Hermes is not installed or its home directory is unavailable.');
+
+    const memories = await this.getMemories();
+    const current = memories.find((memory) => memory.id === input.id);
+    if (!current) throw new Error('The selected Hermes memory no longer exists. Refresh and try again.');
+    if (current.updatedAt !== input.expectedUpdatedAt) {
+      throw new Error('This memory changed outside Hermes Hub. Reload it before saving so newer changes are not overwritten.');
+    }
+
+    const relative = path.relative(install.homePath, current.path);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative) || path.extname(current.path).toLowerCase() !== '.md') {
+      throw new Error('Hermes Hub can only edit discovered Markdown memories inside the active Hermes home.');
+    }
+
+    const temporaryPath = `${current.path}.hermes-hub-${process.pid}-${Date.now()}.tmp`;
+    try {
+      fs.writeFileSync(temporaryPath, input.content, { encoding: 'utf-8', flag: 'wx' });
+      fs.renameSync(temporaryPath, current.path);
+    } finally {
+      if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
+    }
+
+    const updated = (await this.getMemories()).find((memory) => memory.id === input.id);
+    if (!updated) throw new Error('Hermes memory was saved but could not be reloaded.');
+    return updated;
   }
 
   /**
@@ -447,26 +517,44 @@ export class HermesService implements IHermesService {
     if (!install) return [];
 
     const results: HermesFile[] = [];
-    const targets = [
-      { name: 'config.yaml', cat: 'Configuration' as const },
-      { name: 'SOUL.md', cat: 'Configuration' as const },
-      { name: 'state.db', cat: 'Configuration' as const },
-    ];
-
-    let idx = 1;
-    for (const target of targets) {
-      const targetPath = path.join(install.homePath, target.name);
-      if (fs.existsSync(targetPath)) {
+    const classify = (relative: string): HermesFile['category'] => {
+      const normalized = relative.replace(/\\/g, '/').toLowerCase();
+      if (normalized.endsWith('.md') && (normalized.includes('memory') || normalized === 'soul.md')) return 'Memories';
+      if (normalized.startsWith('skills/')) return 'Skills';
+      if (normalized.startsWith('sessions/') || normalized.startsWith('pastes/')) return 'Sessions/Exports';
+      if (normalized.startsWith('logs/')) return 'Logs';
+      if (/\.(ya?ml|json|toml|env|ini)$/.test(normalized) || normalized === '.env') return 'Configuration';
+      return 'Other';
+    };
+    const pending = [install.homePath];
+    const maximumFiles = 10_000;
+    const generatedDirectories = new Set(['node', 'cache', 'audio_cache', 'image_cache', 'bootstrap-cache', 'installs', 'runtime', 'bin', 'hermes-agent', 'tools']);
+    while (pending.length && results.length < maximumFiles) {
+      const directory = pending.pop()!;
+      let entries: fs.Dirent[] = [];
+      try { entries = fs.readdirSync(directory, { withFileTypes: true }); } catch { continue; }
+      for (const entry of entries) {
+        if (results.length >= maximumFiles) break;
+        const entryPath = path.join(directory, entry.name);
+        if (entry.isSymbolicLink()) continue;
+        if (entry.isDirectory()) {
+          const relativeDirectory = path.relative(install.homePath, entryPath).replace(/\\/g, '/');
+          if (!relativeDirectory.includes('/') && generatedDirectories.has(relativeDirectory.toLowerCase())) continue;
+          pending.push(entryPath);
+          continue;
+        }
+        if (!entry.isFile()) continue;
         try {
-          const stat = fs.statSync(targetPath);
+          const stat = fs.statSync(entryPath);
+          const relative = path.relative(install.homePath, entryPath).replace(/\\/g, '/');
           results.push({
-            id: `file-${idx++}`,
-            name: target.name,
-            category: target.cat,
-            path: targetPath,
+            id: `file-${crypto.createHash('sha256').update(relative).digest('hex').slice(0, 16)}`,
+            name: relative,
+            category: classify(relative),
+            path: entryPath,
             size: stat.size,
             modifiedAt: new Date(stat.mtimeMs).toISOString(),
-            sha256: simpleSha256(target.name + stat.size),
+            sha256: crypto.createHash('sha256').update(`${relative}:${stat.size}:${stat.mtimeMs}`).digest('hex'),
             originDevice: 'local',
             originDeviceName: 'Local Machine',
             revision: 1,
@@ -528,6 +616,10 @@ export class MockHermesAdapter implements IHermesService {
 
   async getMemories(): Promise<HermesMemory[]> {
     return [];
+  }
+
+  async updateMemory(_input: UpdateHermesMemoryInput): Promise<HermesMemory> {
+    throw new Error('Mock Hermes memories are read-only.');
   }
 
   async getSkills(): Promise<HermesSkill[]> {

@@ -5,6 +5,7 @@ import { CommandPalette } from './components/layout/CommandPalette';
 import { RuntimeStatusBar } from './components/layout/RuntimeStatusBar';
 import { FirstRunWizard } from './components/onboarding/FirstRunWizard';
 import { DashboardView } from './components/dashboard/DashboardView';
+import { HermesView } from './components/hermes/HermesView';
 import { DevicesView } from './components/devices/DevicesView';
 import { SessionsView } from './components/sessions/SessionsView';
 import { MemoryView } from './components/memory/MemoryView';
@@ -43,6 +44,7 @@ import {
   HermesSkill,
   MeshSyncActionResult,
   MeshSyncStatus,
+  ModelPriceInfo,
   OnboardingState,
   OverallStats,
   RuntimeHealth,
@@ -56,6 +58,9 @@ import {
   SourceRepositoryStatus,
   SyncthingState,
   TailscaleState,
+  UpdateHermesMemoryInput,
+  UpdateHermesMemoryResult,
+  HermesCredentialBridgeResult,
   SharedVaultStatus,
   VaultEnvironmentProfile,
   VaultSetupInput,
@@ -112,6 +117,10 @@ declare global {
       adoptPrimaryBaseline: (confirmed: boolean) => Promise<MeshSyncActionResult>;
       getSessions: (options?: any) => Promise<any[]>;
       getMemories: () => Promise<HermesMemory[]>;
+      updateMemory: (input: UpdateHermesMemoryInput) => Promise<UpdateHermesMemoryResult>;
+      getModelPricing: (modelIds: string[]) => Promise<ModelPriceInfo[]>;
+      applyVaultEnvironmentToHermes: (profileId: string, confirmed: boolean) => Promise<HermesCredentialBridgeResult>;
+      importHermesCredentials: (confirmed: boolean) => Promise<HermesCredentialBridgeResult>;
       getSkills: () => Promise<HermesSkill[]>;
       getFiles: () => Promise<HermesFile[]>;
       getActivity: () => Promise<ActivityEvent[]>;
@@ -515,6 +524,14 @@ export const App: React.FC = () => {
     setVaultSecrets(status.locked ? [] : await window.hermesHub.getVaultSecrets());
   };
 
+  const handleUpdateMemory = async (input: UpdateHermesMemoryInput): Promise<UpdateHermesMemoryResult> => {
+    if (!window.hermesHub?.updateMemory) throw new Error('Memory editing requires the Hermes Hub desktop bridge.');
+    const result = await window.hermesHub.updateMemory(input);
+    setMemories((current) => current.map((memory) => memory.id === result.memory.id ? result.memory : memory));
+    showNotification(result.message);
+    return result;
+  };
+
   const handleCompleteOnboarding = async (input: CompleteOnboardingInput) => {
     if (!window.hermesHub) throw new Error('Desktop bridge unavailable');
     await window.hermesHub.completeOnboarding(input);
@@ -591,8 +608,10 @@ export const App: React.FC = () => {
           {currentTab === 'sessions' && <SessionsView sessions={sessions} initialSelectedSessionId={location.tab === 'sessions' ? location.entityId : undefined} />}
 
           {currentTab === 'memory' && (
-            <MemoryView memories={memories} devices={devices} initialSelectedMemoryId={location.tab === 'memory' ? location.entityId : undefined} />
+            <MemoryView memories={memories} devices={devices} initialSelectedMemoryId={location.tab === 'memory' ? location.entityId : undefined} onSaveMemory={handleUpdateMemory} />
           )}
+
+          {currentTab === 'hermes' && <HermesView sessions={sessions} memories={memories} skills={skills} files={files} vaultStatus={vaultStatus} onRefreshAll={loadHubData} />}
 
           {currentTab === 'skills' && (
             <SkillsView skills={skills} devices={devices} initialSelectedSkillId={location.tab === 'skills' ? location.entityId : undefined} />

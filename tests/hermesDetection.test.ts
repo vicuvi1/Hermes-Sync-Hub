@@ -92,6 +92,25 @@ describe('Hermes Detection & Inspection Service (Milestone 3)', () => {
     expect(memories[0].content).toContain('Agent soul instructions');
   });
 
+  it('should update a discovered Hermes memory and reject stale edits', async () => {
+    const service = new HermesService(mockHermesHome);
+    const original = (await service.getMemories())[0];
+    const updated = await service.updateMemory({
+      id: original.id,
+      content: '# Persona\nUpdated directly from Hermes Hub\n',
+      expectedUpdatedAt: original.updatedAt,
+    });
+
+    expect(updated.content).toContain('Updated directly from Hermes Hub');
+    expect(fs.readFileSync(path.join(mockHermesHome, 'SOUL.md'), 'utf-8')).toBe(updated.content);
+
+    await expect(service.updateMemory({
+      id: original.id,
+      content: 'stale overwrite',
+      expectedUpdatedAt: '1970-01-01T00:00:00.000Z',
+    })).rejects.toThrow('changed outside Hermes Hub');
+  });
+
   it('should extract sessions non-destructively', async () => {
     const service = new HermesService(mockHermesHome);
     const sessions = await service.getSessions();

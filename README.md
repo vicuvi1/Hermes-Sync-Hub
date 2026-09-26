@@ -42,6 +42,7 @@ Hermes Hub provides one place to:
 
 - Find and open local work instantly with a private universal Command Center.
 - Detect the local Hermes Agent installation and inspect its health.
+- Control the live Hermes connection from a dedicated dashboard with complete user-data inventory, usage, models, prices, and credential bridging.
 - Distinguish healthy, offline, unavailable, misconfigured, and failed services.
 - Register and pair trusted devices.
 - Inspect Hermes sessions, memories, skills, and configuration files.
@@ -89,13 +90,21 @@ Press `Ctrl+K` from anywhere to search session titles and messages, memories, sk
 
 Vault plaintext, credentials, API keys, live databases, diagnostics, and redacted originals are never indexed. Actions such as synchronization, backup creation, update checks, and pairing show a summary and require confirmation.
 
+### Hermes Control Center
+
+The **Hermes** section is the direct operational bridge to the installed Hermes Agent. It shows runtime status and location, request/session counts, recorded or estimated token usage, Hermes-reported cost, models used, skills, plugins, memories, and the complete user-relevant file inventory. Current model prices are fetched from OpenRouter's public model catalog for the exact model IDs found in local sessions; prices are informational and include the fetch time.
+
+The credential bridge never sends secret values through the renderer. With Shared Vault unlocked, an encrypted environment profile can be applied to the local Hermes `.env` file through privileged desktop code. Hermes Hub creates a backup first and keeps the previous environment protected with Windows secure storage. Existing provider keys in the Hermes `.env` file can also be imported directly into encrypted Shared Vault entries. Restart Hermes after changing its environment if the running process does not reload environment variables dynamically.
+
+Generated dependency trees, downloaded runtimes, and caches are summarized instead of rendering thousands of package files. User configuration, sessions, memories, profiles, skills, plugins, logs, state metadata, and top-level runtime files are inventoried. SQLite databases, WAL/SHM files, locks, binaries, and credential files are visible as metadata but are not opened or directly edited.
+
 ### Devices
 
 Shows the local machine and registered peers, including identity, operating system, Hermes, Tailscale, Syncthing, content counts, last sync, and backup state.
 
 ### Sessions, Memory, Skills, and Files
 
-These screens display content discovered by live services. Supported operations use service APIs and managed files rather than directly mutating an active Hermes database.
+These screens display content discovered by live services. Memory discovers root `SOUL.md`, root `MEMORY.md`, and nested Markdown memories. **Edit memory** writes directly to the real Hermes file using stale-edit protection and atomic replacement, but only after a recovery backup is created; the updated memory is then staged for mesh synchronization and reindexed for search. Skills recursively count their real files and use their own documentation as descriptions. Files inventories user-relevant content throughout the active Hermes home. Supported operations use typed service APIs and managed files rather than mutating an active Hermes database.
 
 ### Vault
 

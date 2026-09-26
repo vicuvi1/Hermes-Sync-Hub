@@ -8,12 +8,16 @@ import {
   AppLocation,
   CompleteOnboardingInput,
   Device,
+  HermesCredentialBridgeResult,
+  ModelPriceInfo,
   OverallStats,
   RuntimeHealth,
   SavedSearch,
   SearchDocument,
   SearchEntityKind,
   SearchQuery,
+  UpdateHermesMemoryInput,
+  UpdateHermesMemoryResult,
   VaultEnvironmentProfile,
   VaultSetupInput,
   VaultUnlockInput,
@@ -134,6 +138,16 @@ function validateSearchQuery(value: unknown): SearchQuery {
   return { text, filter: kinds ? { ...raw.filter, kinds } : raw.filter, limit: Math.min(Math.max(raw.limit || 50, 1), 100) };
 }
 
+function validateMemoryUpdate(value: unknown): UpdateHermesMemoryInput {
+  if (!value || typeof value !== 'object') throw new Error('Memory update details are required.');
+  const raw = value as Partial<UpdateHermesMemoryInput>;
+  const id = requireString(raw.id, 'Memory ID', 100);
+  const expectedUpdatedAt = requireString(raw.expectedUpdatedAt, 'Expected modification time', 100);
+  if (typeof raw.content !== 'string') throw new Error('Memory content must be text.');
+  if (Buffer.byteLength(raw.content, 'utf-8') > 2 * 1024 * 1024) throw new Error('Memory content cannot exceed 2 MB.');
+  return { id, content: raw.content, expectedUpdatedAt };
+}
+
 function searchDocument(id: string, kind: SearchEntityKind, title: string, body: string, location: AppLocation, extra: Partial<SearchDocument> = {}): SearchDocument {
   return { id, kind, title, body: redactSecrets(body || ''), location, ...extra };
 }
@@ -163,6 +177,7 @@ async function buildSearchDocuments(): Promise<SearchDocument[]> {
   activityService.list(1_000).forEach((event) => documents.push(searchDocument(`activity:${event.id}`, 'activity', event.title, event.description, { tab: 'activity', entityId: event.id }, { subtitle: `${event.status} · ${event.sourceDevice}`, updatedAt: event.timestamp, deviceName: event.sourceDevice })));
 
   const pages: Array<[string, string, AppLocation['tab'], string]> = [
+    ['hermes', 'Hermes Control Center', 'hermes', 'Live Hermes runtime, complete inventory, provider credentials, usage, models and current pricing'],
     ['settings', 'Settings', 'settings', 'Application, integrations, privacy, updates and Developer Mode'],
     ['help', 'Help & README', 'help', 'Product handbook, setup and troubleshooting'],
     ['vault', 'Shared Vault', 'vault', 'Password-unlocked encrypted secrets and environment profiles. Secret values are never indexed.'],
@@ -621,6 +636,119 @@ ipcMain.handle(IPC_CHANNELS.GET_SESSIONS, async (_event, options?: any) => {
 });
 
 ipcMain.handle(IPC_CHANNELS.GET_MEMORIES, async () => hermesService.getMemories());
+ipcMain.handle(IPC_CHANNELS.UPDATE_MEMORY, async (_event, value: unknown): Promise<UpdateHermesMemoryResult> => {
+  const input = validateMemoryUpdate(value);
+  const current = (await hermesService.getMemories()).find((memory) => memory.id === input.id);
+  if (!current) throw new Error('The selected Hermes memory was not found.');
+
+  const backup = await backupService.createBackup({
+    name: `Before editing ${current.title}`,
+    notes: `Automatic recovery backup created before Hermes Hub edited ${current.path}.`,
+  });
+  const memory = await hermesService.updateMemory(input);
+  let synchronized = false;
+  let syncActions = 0;
+  try {
+    const syncResult = await syncEngine.executeSyncCycle({ categories: ['memories'] });
+    syncActions = syncResult.actions.length;
+    synchronized = true;
+  } catch {}
+
+  activityService.record({
+    type: 'file_sync',
+    title: `${memory.title} edited in Hermes Hub`,
+    description: synchronized
+      ? 'Saved directly to Hermes and staged for mesh synchronization.'
+      : 'Saved directly to Hermes; mesh synchronization is still pending.',
+    sourceDevice: deviceIdentity.getLocalDevice().deviceName,
+    filesCount: 1,
+    status: synchronized ? 'success' : 'warning',
+    metadata: { memoryId: memory.id, backupId: backup.id },
+  });
+  void reindexSearch();
+  return {
+    memory,
+    backupId: backup.id,
+    synchronized,
+    syncActions,
+    message: synchronized
+      ? `${memory.title} was saved to Hermes and staged for synchronization.`
+      : `${memory.title} was saved to Hermes. Run Sync Now when mesh services are available.`,
+  };
+});
+ipcMain.handle(IPC_CHANNELS.GET_MODEL_PRICING, async (_event, requestedModels: unknown): Promise<ModelPriceInfo[]> => {
+  if (!Array.isArray(requestedModels) || requestedModels.length > 50 || requestedModels.some((model) => typeof model !== 'string' || model.length > 200)) {
+    throw new Error('Model pricing requests must contain no more than 50 valid model IDs.');
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/models', { signal: controller.signal, headers: { 'User-Agent': `Hermes-Hub/${app.getVersion()}` } });
+    if (!response.ok) throw new Error(`Pricing service returned HTTP ${response.status}.`);
+    const payload = await response.json() as { data?: Array<{ id?: string; name?: string; context_length?: number; pricing?: { prompt?: string; completion?: string } }> };
+    const wanted = new Set(requestedModels.map((model) => model.replace(/^openrouter\//, '').toLowerCase()));
+    const fetchedAt = new Date().toISOString();
+    return (payload.data || []).filter((model) => model.id && wanted.has(model.id.toLowerCase())).map((model) => ({
+      id: model.id!,
+      name: model.name || model.id!,
+      contextLength: Number(model.context_length || 0),
+      promptUsdPerMillion: Number(model.pricing?.prompt || 0) * 1_000_000,
+      completionUsdPerMillion: Number(model.pricing?.completion || 0) * 1_000_000,
+      fetchedAt,
+    }));
+  } finally {
+    clearTimeout(timeout);
+  }
+});
+ipcMain.handle(IPC_CHANNELS.APPLY_VAULT_ENVIRONMENT_TO_HERMES, async (_event, profileId: unknown, confirmed: unknown): Promise<HermesCredentialBridgeResult> => {
+  if (confirmed !== true) throw new Error('Applying credentials to Hermes requires explicit confirmation.');
+  const id = requireString(profileId, 'Environment profile ID', 100);
+  const profile = await sharedVaultService.getEnvironment(id);
+  if (!profile) throw new Error('The selected Vault environment profile was not found or the Vault is locked.');
+  const install = await hermesService.detect();
+  if (!install) throw new Error('Hermes is not installed.');
+  const backup = await backupService.createBackup({ name: `Before applying ${profile.name} to Hermes`, notes: 'Automatic backup before updating the Hermes environment file.' });
+  const envPath = path.join(install.homePath, '.env');
+  const existingText = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf-8') : '';
+  if (existingText && safeStorage.isEncryptionAvailable() && backup.filePath) {
+    fs.writeFileSync(path.join(backup.filePath, 'hermes-env.windows-encrypted'), safeStorage.encryptString(existingText));
+  }
+  const existing = existingText.split(/\r?\n/);
+  const updates = new Map(profile.variables.map((variable) => [variable.key, variable.value]));
+  const written = new Set<string>();
+  const merged = existing.map((line) => {
+    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+    if (!match || !updates.has(match[1])) return line;
+    written.add(match[1]);
+    return `${match[1]}=${JSON.stringify(updates.get(match[1]))}`;
+  });
+  for (const [key, value] of updates) if (!written.has(key)) merged.push(`${key}=${JSON.stringify(value)}`);
+  const temporaryPath = `${envPath}.hermes-hub-${process.pid}-${Date.now()}.tmp`;
+  fs.writeFileSync(temporaryPath, `${merged.join('\n').replace(/\n+$/, '')}\n`, { encoding: 'utf-8', flag: 'wx' });
+  fs.renameSync(temporaryPath, envPath);
+  activityService.record({ type: 'file_sync', title: 'Vault credentials applied to Hermes', description: `${profile.variables.length} variables from ${profile.name} were written to the local Hermes environment.`, sourceDevice: deviceIdentity.getLocalDevice().deviceName, filesCount: 1, status: 'success', metadata: { profileId: id, backupId: backup.id } });
+  return { success: true, affectedCount: profile.variables.length, backupId: backup.id, message: `${profile.variables.length} environment variables are now available to Hermes. Restart Hermes if it is already running.` };
+});
+ipcMain.handle(IPC_CHANNELS.IMPORT_HERMES_CREDENTIALS, async (_event, confirmed: unknown): Promise<HermesCredentialBridgeResult> => {
+  if (confirmed !== true) throw new Error('Importing Hermes credentials requires explicit confirmation.');
+  const install = await hermesService.detect();
+  if (!install) throw new Error('Hermes is not installed.');
+  const envPath = path.join(install.homePath, '.env');
+  if (!fs.existsSync(envPath)) return { success: true, affectedCount: 0, message: 'Hermes has no .env credential file to import.' };
+  const matches = fs.readFileSync(envPath, 'utf-8').split(/\r?\n/).map((line) => {
+    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!match || !/(KEY|TOKEN|SECRET|PASSWORD|PASS|CREDENTIAL|AUTH)/i.test(match[1])) return null;
+    let value = match[2].trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+    return { key: match[1], value };
+  }).filter((item): item is { key: string; value: string } => Boolean(item?.value));
+  for (const item of matches) {
+    const id = `hermes-env-${crypto.createHash('sha256').update(item.key).digest('hex').slice(0, 16)}`;
+    await sharedVaultService.saveSecret({ id, key: item.key, value: item.value, category: item.key.includes('PASSWORD') ? 'Passwords' : 'API Keys', description: 'Imported from the local Hermes environment', isMasked: true, updatedAt: new Date().toISOString(), originDevice: deviceIdentity.getLocalDevice().deviceName, tags: ['Hermes', 'Imported'] });
+  }
+  activityService.record({ type: 'file_sync', title: 'Hermes credentials imported into Shared Vault', description: `${matches.length} credential values were encrypted in the Shared Vault.`, sourceDevice: deviceIdentity.getLocalDevice().deviceName, status: 'success', metadata: { importedCount: matches.length } });
+  return { success: true, affectedCount: matches.length, message: `${matches.length} Hermes credentials were imported into the encrypted Shared Vault.` };
+});
 ipcMain.handle(IPC_CHANNELS.GET_SKILLS, async () => hermesService.getSkills());
 ipcMain.handle(IPC_CHANNELS.GET_FILES, async () => hermesService.getConfigFiles());
 ipcMain.handle(IPC_CHANNELS.GET_ACTIVITY, async () => activityService.list());

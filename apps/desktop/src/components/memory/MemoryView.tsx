@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { HermesMemory, Device } from '@hermes-hub/types';
+import { HermesMemory, Device, UpdateHermesMemoryInput, UpdateHermesMemoryResult } from '@hermes-hub/types';
 import { formatTimeAgo } from '@hermes-hub/shared';
 import {
   Brain,
@@ -7,18 +7,35 @@ import {
   CheckCircle2,
   Clock,
   Laptop,
+  Pencil,
+  Save,
+  X,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface MemoryViewProps {
   memories: HermesMemory[];
   devices: Device[];
   initialSelectedMemoryId?: string;
+  onSaveMemory: (input: UpdateHermesMemoryInput) => Promise<UpdateHermesMemoryResult>;
 }
 
-export const MemoryView: React.FC<MemoryViewProps> = ({ memories, devices, initialSelectedMemoryId }) => {
+export const MemoryView: React.FC<MemoryViewProps> = ({ memories, devices, initialSelectedMemoryId, onSaveMemory }) => {
   const [selectedMemory, setSelectedMemory] = useState<HermesMemory>(memories[0]);
   const [search, setSearch] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
   useEffect(() => { const requested = memories.find((memory) => memory.id === initialSelectedMemoryId); if (requested) setSelectedMemory(requested); }, [initialSelectedMemoryId, memories]);
+  useEffect(() => {
+    if (!selectedMemory) return;
+    const refreshed = memories.find((memory) => memory.id === selectedMemory.id);
+    if (refreshed && !isEditing) {
+      setSelectedMemory(refreshed);
+      setDraft(refreshed.content);
+    }
+  }, [memories, selectedMemory?.id, isEditing]);
 
   const filteredMemories = memories.filter(
     (m) =>
@@ -27,7 +44,41 @@ export const MemoryView: React.FC<MemoryViewProps> = ({ memories, devices, initi
   );
 
   const handleSelectMemory = (mem: HermesMemory) => {
+    if (isEditing && draft !== selectedMemory.content && !window.confirm('Discard your unsaved memory changes?')) return;
     setSelectedMemory(mem);
+    setDraft(mem.content);
+    setIsEditing(false);
+    setMessage(null);
+  };
+
+  const beginEditing = () => {
+    if (!selectedMemory) return;
+    setDraft(selectedMemory.content);
+    setMessage(null);
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setDraft(selectedMemory.content);
+    setIsEditing(false);
+    setMessage(null);
+  };
+
+  const saveMemory = async () => {
+    if (!selectedMemory || draft === selectedMemory.content) return;
+    setIsSaving(true);
+    setMessage(null);
+    try {
+      const result = await onSaveMemory({ id: selectedMemory.id, content: draft, expectedUpdatedAt: selectedMemory.updatedAt });
+      setSelectedMemory(result.memory);
+      setDraft(result.memory.content);
+      setIsEditing(false);
+      setMessage(`${result.message} Recovery backup: ${result.backupId}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Hermes memory could not be saved.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -103,8 +154,16 @@ export const MemoryView: React.FC<MemoryViewProps> = ({ memories, devices, initi
                 </div>
               </div>
 
-              <span className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">Read-only live view</span>
+              <div className="flex items-center gap-2">
+                {isEditing ? <>
+                  <button onClick={cancelEditing} disabled={isSaving} className="flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-muted disabled:opacity-50"><X className="h-3.5 w-3.5" />Cancel</button>
+                  <button onClick={() => void saveMemory()} disabled={isSaving || draft === selectedMemory.content} className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground shadow-lg shadow-primary/15 disabled:opacity-40"><Save className="h-3.5 w-3.5" />{isSaving ? 'Saving…' : 'Save to Hermes'}</button>
+                </> : <button onClick={beginEditing} className="flex items-center gap-1.5 rounded-xl border border-primary/25 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/15"><Pencil className="h-3.5 w-3.5" />Edit memory</button>}
+              </div>
             </div>
+
+            <div className="flex items-start gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/8 px-3 py-2.5 text-xs text-emerald-600 dark:text-emerald-300"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /><span><strong>Connected to live Hermes.</strong> Saving writes directly to this file, creates a recovery backup first, and stages the change for your mesh.</span></div>
+            {message && <div className="rounded-xl border border-primary/20 bg-primary/10 px-3 py-2.5 text-xs text-primary">{message}</div>}
 
             {/* Device Sync Matrix (Per User Spec: Desktop ✓, Zenbook ✓, Laptop 3 pending) */}
             <div className="p-3 rounded-xl bg-muted/40 border border-border/40 text-xs">
@@ -136,8 +195,8 @@ export const MemoryView: React.FC<MemoryViewProps> = ({ memories, devices, initi
             </div>
 
             {/* Content Body */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="p-4 rounded-xl bg-muted/20 border border-border/40 font-mono text-xs text-foreground whitespace-pre-wrap leading-relaxed h-full overflow-y-auto">{selectedMemory.content}</div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {isEditing ? <textarea autoFocus spellCheck={false} value={draft} onChange={(event) => setDraft(event.target.value)} className="h-full min-h-72 w-full resize-none rounded-xl border border-primary/35 bg-background p-4 font-mono text-xs leading-relaxed text-foreground outline-none ring-2 ring-primary/10" /> : <div className="p-4 rounded-xl bg-muted/20 border border-border/40 font-mono text-xs text-foreground whitespace-pre-wrap leading-relaxed h-full overflow-y-auto">{selectedMemory.content}</div>}
             </div>
           </div>
         ) : null}

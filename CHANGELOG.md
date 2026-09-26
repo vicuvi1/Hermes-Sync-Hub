@@ -2,6 +2,28 @@
 
 All notable changes are documented here. The project uses semantic version tags.
 
+## 0.5.0 — Direct Hermes bridge
+
+### Added
+
+- Dedicated Hermes Control Center with live runtime, inventory, usage, model, price, extension, and Vault status.
+- Direct, recovery-backed editing for discovered Hermes Markdown memories with stale-edit protection.
+- Encrypted credential import from the local Hermes environment into Shared Vault.
+- Confirmed application of Vault environment profiles to Hermes without exposing plaintext to the renderer.
+- Live OpenRouter catalog pricing for model IDs found in local Hermes sessions.
+
+### Changed
+
+- Memory discovery now includes root and nested Markdown memories.
+- Skill discovery recursively counts files and reads available documentation summaries.
+- File discovery now inventories user-relevant content across the Hermes home instead of three hardcoded files.
+- Generated runtimes, dependency trees, and caches are summarized to keep the interface responsive.
+
+### Safety
+
+- Every memory edit and credential application creates recovery material before changing Hermes.
+- Live databases, WAL/SHM files, locks, binaries, and secret values remain non-editable from the inventory.
+
 ## 0.4.2 — Subtle motion
 
 ### Changed

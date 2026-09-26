@@ -42,6 +42,7 @@ const CATEGORIES: (HermesFileCategory | 'All')[] = [
   'Skills',
   'Sessions/Exports',
   'Logs',
+  'Other',
 ];
 
 export const FilesView: React.FC<FilesViewProps> = ({ files, initialSelectedFileId }) => {
@@ -370,6 +371,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ files, initialSelectedFile
           />
         </div>
       </div>
+
+      <div className="flex items-center justify-between text-xs text-muted-foreground"><span>Showing <strong className="text-foreground">{filteredFiles.length}</strong> of <strong className="text-foreground">{files.length}</strong> discovered Hermes files.</span><span>Runtime databases and binaries are inventory-only.</span></div>
 
       {/* Files Table */}
       <div className="rounded-2xl border border-border bg-card/70 overflow-hidden shadow-xs">

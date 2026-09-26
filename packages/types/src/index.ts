@@ -198,6 +198,36 @@ export interface HermesMemory {
   isLatest: boolean;
 }
 
+export interface UpdateHermesMemoryInput {
+  id: string;
+  content: string;
+  expectedUpdatedAt: string;
+}
+
+export interface UpdateHermesMemoryResult {
+  memory: HermesMemory;
+  backupId: string;
+  synchronized: boolean;
+  syncActions: number;
+  message: string;
+}
+
+export interface ModelPriceInfo {
+  id: string;
+  name: string;
+  contextLength: number;
+  promptUsdPerMillion: number;
+  completionUsdPerMillion: number;
+  fetchedAt: string;
+}
+
+export interface HermesCredentialBridgeResult {
+  success: boolean;
+  affectedCount: number;
+  backupId?: string;
+  message: string;
+}
+
 export interface HermesSkill {
   id: string;
   name: string;
@@ -327,7 +357,7 @@ export type SearchEntityKind =
   | 'action';
 
 export interface AppLocation {
-  tab: 'dashboard' | 'devices' | 'sessions' | 'memory' | 'skills' | 'files' | 'vault' | 'activity' | 'backups' | 'settings' | 'help';
+  tab: 'dashboard' | 'hermes' | 'devices' | 'sessions' | 'memory' | 'skills' | 'files' | 'vault' | 'activity' | 'backups' | 'settings' | 'help';
   entityId?: string;
   query?: string;
   section?: string;

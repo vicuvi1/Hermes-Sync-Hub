@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
-import type { SavedSearch, SearchIndexStatus, SearchQuery, SearchResult, VaultEnvironmentProfile, VaultSetupInput, VaultUnlockInput } from '@hermes-hub/types';
+import type { ModelPriceInfo, SavedSearch, SearchIndexStatus, SearchQuery, SearchResult, UpdateHermesMemoryInput, VaultEnvironmentProfile, VaultSetupInput, VaultUnlockInput } from '@hermes-hub/types';
 
 // Expose safe, typed API to Renderer process
 contextBridge.exposeInMainWorld('hermesHub', {
@@ -48,6 +48,10 @@ contextBridge.exposeInMainWorld('hermesHub', {
   // Milestone 10 Sessions
   getSessions: (options?: any) => ipcRenderer.invoke(IPC_CHANNELS.GET_SESSIONS, options),
   getMemories: () => ipcRenderer.invoke(IPC_CHANNELS.GET_MEMORIES),
+  updateMemory: (input: UpdateHermesMemoryInput) => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_MEMORY, input),
+  getModelPricing: (modelIds: string[]): Promise<ModelPriceInfo[]> => ipcRenderer.invoke(IPC_CHANNELS.GET_MODEL_PRICING, modelIds),
+  applyVaultEnvironmentToHermes: (profileId: string, confirmed: boolean) => ipcRenderer.invoke(IPC_CHANNELS.APPLY_VAULT_ENVIRONMENT_TO_HERMES, profileId, confirmed),
+  importHermesCredentials: (confirmed: boolean) => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_HERMES_CREDENTIALS, confirmed),
   getSkills: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SKILLS),
   getFiles: () => ipcRenderer.invoke(IPC_CHANNELS.GET_FILES),
   getActivity: () => ipcRenderer.invoke(IPC_CHANNELS.GET_ACTIVITY),
