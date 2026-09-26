@@ -67,6 +67,19 @@ export const IPC_CHANNELS = {
   GET_SESSION_DETAIL: 'hermes-hub:get-session-detail',
   EXPORT_SESSION: 'hermes-hub:export-session',
   IMPORT_SESSION: 'hermes-hub:import-session',
+
+  // Milestone 12 Backups & Revisions channels
+  VERIFY_BACKUP: 'hermes-hub:verify-backup',
+  RESTORE_BACKUP: 'hermes-hub:restore-backup',
+  DELETE_BACKUP: 'hermes-hub:delete-backup',
+  GET_FILE_REVISIONS: 'hermes-hub:get-file-revisions',
+  ROLLBACK_REVISION: 'hermes-hub:rollback-revision',
+
+  // Milestone 13 Polish & Diagnostics channels
+  GET_APP_SETTINGS: 'hermes-hub:get-app-settings',
+  UPDATE_APP_SETTINGS: 'hermes-hub:update-app-settings',
+  SHOW_NOTIFICATION: 'hermes-hub:show-notification',
+  GET_DIAGNOSTICS_REPORT: 'hermes-hub:get-diagnostics-report',
 } as const;
 
 export interface PairingCodePayload {

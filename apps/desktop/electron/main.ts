@@ -16,12 +16,19 @@ import {
   WorkspaceService,
   SyncEngineService,
   HermesSessionService,
+  BackupService,
+  RevisionService,
+  DiagnosticsService,
 } from '@hermes-hub/agent';
+import { SettingsManager } from './settings.js';
+import { setupTray, destroyTray } from './tray.js';
+import { sendDesktopNotification } from './notifications.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 let mainWindow: BrowserWindow | null = null;
+const settingsManager = new SettingsManager();
 const deviceIdentity = new DeviceIdentityService();
 const deviceRegistry = new DeviceRegistryService(deviceIdentity);
 const healthMonitor = new HealthMonitorService(deviceIdentity);
@@ -43,6 +50,18 @@ const syncEngine = new SyncEngineService(
   syncthingAdapter
 );
 const sessionService = new HermesSessionService(hermesService, workspaceService);
+const backupService = new BackupService(workspaceService, hermesService, deviceIdentity);
+const revisionService = new RevisionService(workspaceService, deviceIdentity);
+const diagnosticsService = new DiagnosticsService(
+  deviceIdentity,
+  healthMonitor,
+  hermesService,
+  tailscaleAdapter,
+  syncthingAdapter,
+  workspaceService,
+  backupService
+);
+
 const agentServer = new AgentServer(
   deviceIdentity,
   healthMonitor,
@@ -53,7 +72,10 @@ const agentServer = new AgentServer(
   pairingService,
   workspaceService,
   syncEngine,
-  sessionService
+  sessionService,
+  backupService,
+  revisionService,
+  diagnosticsService
 );
 
 function createWindow() {
@@ -75,7 +97,19 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
+    const settings = settingsManager.getSettings();
+    if (!settings.minimizeToTray) {
+      mainWindow?.show();
+    }
+  });
+
+  // Close to tray behavior
+  mainWindow.on('close', (event) => {
+    const settings = settingsManager.getSettings();
+    if (settings.closeToTray && !(app as any).isQuitting) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
   });
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
@@ -295,13 +329,64 @@ ipcMain.handle(IPC_CHANNELS.IMPORT_SESSION, async (_event, payload: any) => {
   return sessionService.importSession(payload);
 });
 
-ipcMain.handle(IPC_CHANNELS.EXPORT_DIAGNOSTICS, async () => {
-  const health = await healthMonitor.getHealthSnapshot();
-  const dummyLog = `Log entry: user key sk-or-v1-98a417df8b6e2104bcde190847321fa890123ef configured for device ${health.deviceId}.`;
+// Milestone 12 Backups & Revisions
+ipcMain.handle(IPC_CHANNELS.GET_BACKUPS, async () => {
+  return backupService.getBackups();
+});
+
+ipcMain.handle(IPC_CHANNELS.CREATE_BACKUP, async (_event, options?: any) => {
+  const b = await backupService.createBackup(options);
+  sendDesktopNotification('Backup Created', `Backup ${b.name} captured successfully.`);
+  return b;
+});
+
+ipcMain.handle(IPC_CHANNELS.VERIFY_BACKUP, async (_event, backupId: string) => {
+  return backupService.verifyBackup(backupId);
+});
+
+ipcMain.handle(IPC_CHANNELS.RESTORE_BACKUP, async (_event, options: any) => {
+  return backupService.restoreBackup(options);
+});
+
+ipcMain.handle(IPC_CHANNELS.DELETE_BACKUP, async (_event, backupId: string) => {
+  return backupService.deleteBackup(backupId);
+});
+
+ipcMain.handle(IPC_CHANNELS.GET_FILE_REVISIONS, async (_event, filePath?: string) => {
+  if (filePath) {
+    return revisionService.getFileRevisions(filePath);
+  }
+  return revisionService.getAllRevisions();
+});
+
+ipcMain.handle(IPC_CHANNELS.ROLLBACK_REVISION, async (_event, filePath: string, targetRevision: number) => {
+  return revisionService.rollbackRevision(filePath, targetRevision);
+});
+
+// Milestone 13 Polish & Diagnostics
+ipcMain.handle(IPC_CHANNELS.GET_APP_SETTINGS, async () => {
+  return settingsManager.getSettings();
+});
+
+ipcMain.handle(IPC_CHANNELS.UPDATE_APP_SETTINGS, async (_event, updates: any) => {
+  return settingsManager.updateSettings(updates);
+});
+
+ipcMain.handle(IPC_CHANNELS.SHOW_NOTIFICATION, async (_event, title: string, body: string) => {
+  return sendDesktopNotification(title, body);
+});
+
+ipcMain.handle(IPC_CHANNELS.GET_DIAGNOSTICS_REPORT, async () => {
+  return diagnosticsService.generateDiagnosticsReport();
+});
+
+ipcMain.handle(IPC_CHANNELS.EXPORT_DIAGNOSTICS, async (_event, outputPath?: string) => {
+  const filePath = await diagnosticsService.exportDiagnosticsToFile(outputPath);
+  const report = await diagnosticsService.generateDiagnosticsReport();
   return {
     success: true,
-    health,
-    redactedLog: redactSecrets(dummyLog),
+    filePath,
+    report,
   };
 });
 
@@ -320,19 +405,41 @@ app.whenReady().then(async () => {
 
   createWindow();
 
+  if (mainWindow) {
+    setupTray(mainWindow, settingsManager, {
+      onSyncNow: async () => {
+        const res = await syncEngine.executeSyncCycle();
+        sendDesktopNotification('Sync Completed', `Synchronized ${res.actions.length} file action(s).`);
+      },
+      onCreateBackup: async () => {
+        const b = await backupService.createBackup();
+        sendDesktopNotification('Backup Created', `Snapshot archive ${b.name} created successfully.`);
+      },
+    });
+  }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+    } else {
+      mainWindow?.show();
     }
   });
 });
 
 app.on('window-all-closed', () => {
+  const settings = settingsManager.getSettings();
+  if (settings.closeToTray) {
+    // Keep app running in tray
+    return;
+  }
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
 app.on('before-quit', async () => {
+  (app as any).isQuitting = true;
+  destroyTray();
   await agentServer.stop();
 });

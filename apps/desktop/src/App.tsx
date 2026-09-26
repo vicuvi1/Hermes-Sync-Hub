@@ -38,7 +38,7 @@ declare global {
       pingAgent: () => Promise<{ pong: boolean; time: string }>;
       triggerSync: () => Promise<{ success: boolean }>;
       openFolder: (path: string) => Promise<boolean>;
-      exportDiagnostics: () => Promise<{ success: boolean; health: any; redactedLog: string }>;
+      exportDiagnostics: (outputPath?: string) => Promise<{ success: boolean; filePath?: string; report?: any }>;
       getHermesStatus: () => Promise<any>;
       getTailscaleState: () => Promise<TailscaleState>;
       pingTailscalePeer: (ipOrHost: string) => Promise<{ success: boolean; latencyMs?: number; via?: string }>;
@@ -66,6 +66,17 @@ declare global {
       getSessionDetail: (sessionId: string) => Promise<any>;
       exportSession: (options: any) => Promise<any>;
       importSession: (payload: any) => Promise<any>;
+      getBackups: () => Promise<BackupRecord[]>;
+      createBackup: (options?: any) => Promise<BackupRecord>;
+      verifyBackup: (backupId: string) => Promise<any>;
+      restoreBackup: (options: any) => Promise<any>;
+      deleteBackup: (backupId: string) => Promise<boolean>;
+      getFileRevisions: (filePath?: string) => Promise<any>;
+      rollbackRevision: (filePath: string, targetRevision: number) => Promise<any>;
+      getAppSettings: () => Promise<any>;
+      updateAppSettings: (updates: any) => Promise<any>;
+      showNotification: (title: string, body: string) => Promise<boolean>;
+      getDiagnosticsReport: () => Promise<any>;
     };
   }
 }

@@ -283,6 +283,11 @@ export interface BackupRecord {
     configs: number;
   };
   originDevice: string;
+  sha256?: string;
+  filePath?: string;
+  notes?: string;
+  snapshotId?: string;
+  verifiedAt?: string;
 }
 
 export interface ConflictItem {
@@ -579,6 +584,135 @@ export interface SessionImportResult {
   skippedIds: string[];
   errors: string[];
 }
+
+// Milestone 12: Backups and Revisions
+export interface BackupOptions {
+  name?: string;
+  notes?: string;
+  targetPath?: string;
+  retainCount?: number;
+}
+
+export interface BackupVerificationResult {
+  valid: boolean;
+  backupId: string;
+  checkedAt: string;
+  totalFiles: number;
+  matchingFiles: number;
+  errors: string[];
+  missingFiles: string[];
+  tamperedFiles: string[];
+}
+
+export interface BackupRestoreOptions {
+  backupId: string;
+  targetHome?: string;
+  overwrite?: boolean;
+  emergencyRollback?: boolean;
+}
+
+export interface BackupRestoreResult {
+  success: boolean;
+  backupId: string;
+  restoredAt: string;
+  restoredFilesCount: number;
+  safetyRollbackSnapshotId?: string;
+  error?: string;
+}
+
+export interface FileRevision {
+  revision: number;
+  filePath: string;
+  category: string;
+  modifiedAt: string;
+  deviceId: string;
+  deviceName: string;
+  sha256: string;
+  sizeBytes: number;
+  author?: string;
+  changeSummary?: string;
+  contentSnippet?: string;
+}
+
+export interface RevisionHistory {
+  filePath: string;
+  currentRevision: number;
+  totalRevisions: number;
+  revisions: FileRevision[];
+}
+
+export interface RevisionRollbackResult {
+  success: boolean;
+  filePath: string;
+  previousRevision: number;
+  currentRevision: number;
+  rolledBackAt: string;
+  message: string;
+}
+
+// Milestone 13: Polish (Settings, Tray, Notifications, Diagnostics)
+export type AppTheme = 'dark' | 'light' | 'system';
+
+export interface AppSettings {
+  theme: AppTheme;
+  launchOnStartup: boolean;
+  minimizeToTray: boolean;
+  closeToTray: boolean;
+  notificationsEnabled: boolean;
+  autoBackupEnabled: boolean;
+  autoBackupFrequency: 'daily' | 'weekly';
+  maxBackupsToRetain: number;
+}
+
+export interface DiagnosticsReport {
+  generatedAt: string;
+  system: {
+    hostname: string;
+    os: string;
+    platform: string;
+    arch: string;
+    cpuCores: number;
+    totalMemoryMb: number;
+    freeMemoryMb: number;
+  };
+  agent: {
+    status: string;
+    uptimeSeconds: number;
+    pid: number;
+    rssMemoryMb: number;
+    loopbackPort: number;
+  };
+  hermes: {
+    installed: boolean;
+    running: boolean;
+    version: string;
+    home: string;
+    detectedDatabases: string[];
+  };
+  tailscale: {
+    installed: boolean;
+    connected: boolean;
+    backendState?: string;
+    selfIp?: string;
+    peersCount: number;
+  };
+  syncthing: {
+    installed: boolean;
+    running: boolean;
+    deviceId?: string;
+    foldersCount: number;
+    devicesCount: number;
+  };
+  workspace: {
+    rootPath: string;
+    manifestValid: boolean;
+    totalTrackedFiles: number;
+    snapshotsCount: number;
+    backupsCount: number;
+  };
+  recentLogs: string[];
+}
+
 
 
 

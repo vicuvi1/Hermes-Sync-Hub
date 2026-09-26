@@ -212,9 +212,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const { theme, setTheme } = useTheme();
   const [startWithWindows, setStartWithWindows] = useState(false);
   const [startAgentAuto, setStartAgentAuto] = useState(true);
+  const [closeToTray, setCloseToTray] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [diagnosticsExported, setDiagnosticsExported] = useState(false);
+  const [diagnosticsPath, setDiagnosticsPath] = useState<string | null>(null);
   const [pingLatency, setPingLatency] = useState<number | null>(null);
   const [isPinging, setIsPinging] = useState(false);
+
+  useEffect(() => {
+    async function loadSettings() {
+      if (window.hermesHub?.getAppSettings) {
+        try {
+          const s = await window.hermesHub.getAppSettings();
+          if (s) {
+            setStartWithWindows(s.launchOnStartup);
+            setCloseToTray(s.closeToTray);
+            setNotificationsEnabled(s.notificationsEnabled);
+          }
+        } catch {}
+      }
+    }
+    loadSettings();
+  }, []);
 
   // Milestone 4: Tailscale state & peer inspection
   const [copiedIp, setCopiedIp] = useState(false);
@@ -240,10 +259,45 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       ? syncthingState
       : SIMULATED_SYNCTHING;
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    if (window.hermesHub?.exportDiagnostics) {
+      try {
+        const res = await window.hermesHub.exportDiagnostics();
+        if (res?.filePath) {
+          setDiagnosticsPath(res.filePath);
+        }
+      } catch {}
+    }
     onExportDiagnostics();
     setDiagnosticsExported(true);
-    setTimeout(() => setDiagnosticsExported(false), 3000);
+    setTimeout(() => setDiagnosticsExported(false), 4000);
+  };
+
+  const handleToggleStartup = async (val: boolean) => {
+    setStartWithWindows(val);
+    if (window.hermesHub?.updateAppSettings) {
+      await window.hermesHub.updateAppSettings({ launchOnStartup: val });
+    }
+  };
+
+  const handleToggleCloseToTray = async (val: boolean) => {
+    setCloseToTray(val);
+    if (window.hermesHub?.updateAppSettings) {
+      await window.hermesHub.updateAppSettings({ closeToTray: val });
+    }
+  };
+
+  const handleToggleNotifications = async (val: boolean) => {
+    setNotificationsEnabled(val);
+    if (window.hermesHub?.updateAppSettings) {
+      await window.hermesHub.updateAppSettings({ notificationsEnabled: val });
+    }
+    if (val && window.hermesHub?.showNotification) {
+      window.hermesHub.showNotification(
+        'Notifications Active',
+        'Hermes Hub mesh alerts and backup confirmations are enabled.'
+      );
+    }
   };
 
   const handlePing = async () => {
@@ -892,10 +946,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* System Startup Options */}
+      {/* System Startup & Tray Options */}
       <div className="space-y-3">
         <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-          Startup & Daemons
+          Startup & System Tray
         </h3>
         <div className="rounded-xl border border-border bg-card/70 divide-y divide-border/40">
           <div className="p-4 flex items-center justify-between">
@@ -908,7 +962,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
             <button
-              onClick={() => setStartWithWindows(!startWithWindows)}
+              onClick={() => handleToggleStartup(!startWithWindows)}
               className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
                 startWithWindows ? 'bg-primary' : 'bg-muted'
               }`}
@@ -924,21 +978,44 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="p-4 flex items-center justify-between">
             <div>
               <div className="text-sm font-semibold text-foreground">
-                Start Hermes Hub Agent automatically
+                Minimize to System Tray on Close
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                Run background monitoring and snapshotting service quietly
+                Keep the synchronization daemon running quietly in the taskbar
               </div>
             </div>
             <button
-              onClick={() => setStartAgentAuto(!startAgentAuto)}
+              onClick={() => handleToggleCloseToTray(!closeToTray)}
               className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                startAgentAuto ? 'bg-primary' : 'bg-muted'
+                closeToTray ? 'bg-primary' : 'bg-muted'
               }`}
             >
               <div
                 className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                  startAgentAuto ? 'translate-x-5' : 'translate-x-0'
+                  closeToTray ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="p-4 flex items-center justify-between">
+            <div>
+              <div className="text-sm font-semibold text-foreground">
+                Desktop Notifications
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Show native OS alerts for sync completion, backup snapshots, and peer connections
+              </div>
+            </div>
+            <button
+              onClick={() => handleToggleNotifications(!notificationsEnabled)}
+              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
+                notificationsEnabled ? 'bg-primary' : 'bg-muted'
+              }`}
+            >
+              <div
+                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                  notificationsEnabled ? 'translate-x-5' : 'translate-x-0'
                 }`}
               />
             </button>
@@ -951,21 +1028,39 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
           Diagnostics & Privacy
         </h3>
-        <div className="rounded-xl border border-border bg-card/70 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="text-sm font-semibold text-foreground">Export Diagnostics Bundle</div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              Packages recent sync logs, connectivity probes, and environment configs.
-              <strong className="text-foreground ml-1">All secrets are automatically redacted.</strong>
+        <div className="rounded-xl border border-border bg-card/70 p-5 flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-semibold text-foreground">Export Diagnostics Bundle</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Packages recent sync logs, connectivity probes, and environment configs.
+                <strong className="text-foreground ml-1">All secrets are automatically redacted.</strong>
+              </div>
             </div>
+            <button
+              onClick={handleExport}
+              className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-border bg-background hover:bg-muted text-xs font-medium text-foreground transition-colors shrink-0"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>{diagnosticsExported ? 'Bundle Exported ✓' : 'Export Diagnostics'}</span>
+            </button>
           </div>
-          <button
-            onClick={handleExport}
-            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-border bg-background hover:bg-muted text-xs font-medium text-foreground transition-colors shrink-0"
-          >
-            <Download className="h-3.5 w-3.5" />
-            <span>{diagnosticsExported ? 'Bundle Exported ✓' : 'Export Diagnostics'}</span>
-          </button>
+
+          {diagnosticsPath && (
+            <div className="p-3 rounded-lg bg-muted/40 border border-border/50 text-xs font-mono text-zinc-300 flex items-center justify-between">
+              <span className="truncate max-w-lg">Saved to: {diagnosticsPath}</span>
+              <button
+                onClick={() => {
+                  if (window.hermesHub?.openFolder) {
+                    window.hermesHub.openFolder(diagnosticsPath);
+                  }
+                }}
+                className="text-primary hover:underline ml-2 shrink-0 font-sans"
+              >
+                Open File
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

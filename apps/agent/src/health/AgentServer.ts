@@ -9,6 +9,9 @@ import { PairingService } from '../pairing/PairingService.js';
 import { WorkspaceService } from '../workspace/WorkspaceService.js';
 import { SyncEngineService } from '../sync/SyncService.js';
 import { HermesSessionService } from '../sessions/SessionService.js';
+import { BackupService } from '../backups/BackupService.js';
+import { RevisionService } from '../revisions/RevisionService.js';
+import { DiagnosticsService } from '../diagnostics/DiagnosticsService.js';
 
 export const DEFAULT_AGENT_PORT = 48199;
 
@@ -25,6 +28,9 @@ export class AgentServer {
   private workspaceService: WorkspaceService;
   private syncEngine: SyncEngineService;
   private sessionService: HermesSessionService;
+  private backupService: BackupService;
+  private revisionService: RevisionService;
+  private diagnosticsService: DiagnosticsService;
 
   constructor(
     identityService?: DeviceIdentityService,
@@ -36,7 +42,10 @@ export class AgentServer {
     pairingService?: PairingService,
     workspaceService?: WorkspaceService,
     syncEngine?: SyncEngineService,
-    sessionService?: HermesSessionService
+    sessionService?: HermesSessionService,
+    backupService?: BackupService,
+    revisionService?: RevisionService,
+    diagnosticsService?: DiagnosticsService
   ) {
     this.identityService = identityService || new DeviceIdentityService();
     this.deviceRegistry = deviceRegistry || new DeviceRegistryService(this.identityService);
@@ -67,6 +76,23 @@ export class AgentServer {
     this.sessionService =
       sessionService ||
       new HermesSessionService(this.hermesService, this.workspaceService);
+    this.backupService =
+      backupService ||
+      new BackupService(this.workspaceService, this.hermesService, this.identityService);
+    this.revisionService =
+      revisionService ||
+      new RevisionService(this.workspaceService, this.identityService);
+    this.diagnosticsService =
+      diagnosticsService ||
+      new DiagnosticsService(
+        this.identityService,
+        this.healthMonitor,
+        this.hermesService,
+        this.tailscaleAdapter,
+        this.syncthingAdapter,
+        this.workspaceService,
+        this.backupService
+      );
   }
 
   /**
@@ -365,6 +391,133 @@ export class AgentServer {
                 const result = await this.sessionService.importSession(parsed);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(result));
+              } catch (err: any) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+              }
+            });
+            return;
+          }
+
+          // Milestone 12: Backups & Revisions Endpoints
+          if (req.method === 'GET' && url === '/backups') {
+            const backups = await this.backupService.getBackups();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(backups));
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/backups') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const result = await this.backupService.createBackup(parsed);
+                res.writeHead(201, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+              } catch (err: any) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+              }
+            });
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/backups/verify') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const result = await this.backupService.verifyBackup(parsed.backupId);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+              } catch (err: any) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+              }
+            });
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/backups/restore') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const result = await this.backupService.restoreBackup(parsed);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+              } catch (err: any) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+              }
+            });
+            return;
+          }
+
+          if (req.method === 'DELETE' && url.startsWith('/backups/')) {
+            const backupId = url.slice('/backups/'.length);
+            const success = await this.backupService.deleteBackup(backupId);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success, backupId }));
+            return;
+          }
+
+          if (req.method === 'GET' && (url === '/revisions' || url.startsWith('/revisions?'))) {
+            const fullUrl = new URL(req.url || '', 'http://127.0.0.1');
+            const targetPath = fullUrl.searchParams.get('path');
+            if (targetPath) {
+              const history = await this.revisionService.getFileRevisions(targetPath);
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify(history));
+            } else {
+              const all = await this.revisionService.getAllRevisions();
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify(all));
+            }
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/revisions/rollback') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const result = await this.revisionService.rollbackRevision(
+                  parsed.filePath,
+                  Number(parsed.targetRevision)
+                );
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+              } catch (err: any) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+              }
+            });
+            return;
+          }
+
+          // Milestone 13: Diagnostics Endpoints
+          if (req.method === 'GET' && url === '/diagnostics') {
+            const report = await this.diagnosticsService.generateDiagnosticsReport();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(report));
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/diagnostics/export') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const filePath = await this.diagnosticsService.exportDiagnosticsToFile(parsed.outputPath);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, filePath }));
               } catch (err: any) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: err.message }));

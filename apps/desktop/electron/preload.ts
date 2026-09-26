@@ -40,5 +40,20 @@ contextBridge.exposeInMainWorld('hermesHub', {
   getSessionDetail: (sessionId: string) => ipcRenderer.invoke(IPC_CHANNELS.GET_SESSION_DETAIL, sessionId),
   exportSession: (options: any) => ipcRenderer.invoke(IPC_CHANNELS.EXPORT_SESSION, options),
   importSession: (payload: any) => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_SESSION, payload),
+  // Milestone 12 Backups & Revisions
+  getBackups: () => ipcRenderer.invoke(IPC_CHANNELS.GET_BACKUPS),
+  createBackup: (options?: any) => ipcRenderer.invoke(IPC_CHANNELS.CREATE_BACKUP, options),
+  verifyBackup: (backupId: string) => ipcRenderer.invoke(IPC_CHANNELS.VERIFY_BACKUP, backupId),
+  restoreBackup: (options: any) => ipcRenderer.invoke(IPC_CHANNELS.RESTORE_BACKUP, options),
+  deleteBackup: (backupId: string) => ipcRenderer.invoke(IPC_CHANNELS.DELETE_BACKUP, backupId),
+  getFileRevisions: (filePath?: string) => ipcRenderer.invoke(IPC_CHANNELS.GET_FILE_REVISIONS, filePath),
+  rollbackRevision: (filePath: string, targetRevision: number) =>
+    ipcRenderer.invoke(IPC_CHANNELS.ROLLBACK_REVISION, filePath, targetRevision),
+  // Milestone 13 Polish & Diagnostics
+  getAppSettings: () => ipcRenderer.invoke(IPC_CHANNELS.GET_APP_SETTINGS),
+  updateAppSettings: (updates: any) => ipcRenderer.invoke(IPC_CHANNELS.UPDATE_APP_SETTINGS, updates),
+  showNotification: (title: string, body: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SHOW_NOTIFICATION, title, body),
+  getDiagnosticsReport: () => ipcRenderer.invoke(IPC_CHANNELS.GET_DIAGNOSTICS_REPORT),
 });
 

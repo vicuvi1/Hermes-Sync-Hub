@@ -27,6 +27,15 @@ import {
   SessionExportResult,
   SessionImportPayload,
   SessionImportResult,
+  BackupRecord,
+  BackupOptions,
+  BackupVerificationResult,
+  BackupRestoreOptions,
+  BackupRestoreResult,
+  FileRevision,
+  RevisionHistory,
+  RevisionRollbackResult,
+  DiagnosticsReport,
 } from '@hermes-hub/types';
 import { DEFAULT_AGENT_PORT } from '../health/AgentServer.js';
 
@@ -391,6 +400,104 @@ export class AgentClient {
     });
     if (!res.ok) {
       throw new Error(`Failed to import session: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  // Milestone 12: Backups & Revisions
+  async getBackups(): Promise<BackupRecord[]> {
+    const res = await this.fetchWithTimeout('/backups');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch backups: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async createBackup(options?: BackupOptions): Promise<BackupRecord> {
+    const res = await this.fetchWithTimeout('/backups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options || {}),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to create backup: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async verifyBackup(backupId: string): Promise<BackupVerificationResult> {
+    const res = await this.fetchWithTimeout('/backups/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backupId }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to verify backup: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async restoreBackup(options: BackupRestoreOptions): Promise<BackupRestoreResult> {
+    const res = await this.fetchWithTimeout('/backups/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to restore backup: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async deleteBackup(backupId: string): Promise<boolean> {
+    const res = await this.fetchWithTimeout(`/backups/${encodeURIComponent(backupId)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to delete backup: ${res.status}`);
+    }
+    const data = await res.json();
+    return !!data.success;
+  }
+
+  async getFileRevisions(path?: string): Promise<any> {
+    const queryString = path ? `?path=${encodeURIComponent(path)}` : '';
+    const res = await this.fetchWithTimeout(`/revisions${queryString}`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch file revisions: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async rollbackRevision(filePath: string, targetRevision: number): Promise<RevisionRollbackResult> {
+    const res = await this.fetchWithTimeout('/revisions/rollback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filePath, targetRevision }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to rollback file revision: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  // Milestone 13: Diagnostics
+  async getDiagnosticsReport(): Promise<DiagnosticsReport> {
+    const res = await this.fetchWithTimeout('/diagnostics');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch diagnostics report: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async exportDiagnostics(outputPath?: string): Promise<{ success: boolean; filePath: string }> {
+    const res = await this.fetchWithTimeout('/diagnostics/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outputPath }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to export diagnostics: ${res.status}`);
     }
     return res.json();
   }
