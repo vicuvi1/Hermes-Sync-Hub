@@ -73,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange, onlin
       {/* Brand Header */}
       <div>
         <div className="h-[76px] flex items-center gap-3 px-5 border-b border-border/60">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center text-white shadow-lg shadow-primary/20">
+          <div className="hub-logo h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-blue-400 flex items-center justify-center text-white shadow-lg shadow-primary/20">
             <Cpu className="h-5 w-5" />
           </div>
           <button aria-label="Close navigation" onClick={onClose} className="ml-auto rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden">

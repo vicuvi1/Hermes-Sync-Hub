@@ -2,6 +2,15 @@
 
 All notable changes are documented here. The project uses semantic version tags.
 
+## 0.4.2 — Subtle motion
+
+### Changed
+
+- Added a brief fade-and-lift transition when moving between application sections.
+- Added a gentle animated glow to the Hermes Hub mark.
+- Smoothed interactive card and button transitions throughout the workspace.
+- Disabled decorative motion automatically when Windows reduced-motion preferences are enabled.
+
 ## 0.4.1 — Interface refinement
 
 ### Changed
