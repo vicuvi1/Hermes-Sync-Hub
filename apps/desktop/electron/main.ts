@@ -559,7 +559,12 @@ app.whenReady().then(() => {
   }
 
   if (settingsManager.getSettings().autoCheckUpdates) {
-    setTimeout(() => updateManager?.check(), 5000);
+    setTimeout(async () => {
+      const result = await updateManager?.check();
+      if (result?.state === 'available' && settingsManager.getSettings().autoInstallUpdates) {
+        await updateManager?.downloadAndInstall();
+      }
+    }, 5000);
   }
 
   app.on('activate', () => {

@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   demoMode: false,
   onboardingCompleted: false,
   autoCheckUpdates: true,
+  autoInstallUpdates: false,
 };
 
 export class SettingsManager {

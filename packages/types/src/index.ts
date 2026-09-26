@@ -665,6 +665,7 @@ export interface AppSettings {
   demoMode: boolean;
   onboardingCompleted: boolean;
   autoCheckUpdates: boolean;
+  autoInstallUpdates: boolean;
   hermesHome?: string;
   workspacePath?: string;
 }

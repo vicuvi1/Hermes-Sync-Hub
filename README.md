@@ -103,15 +103,15 @@ pnpm dev
 
 Tagged releases publish an x64 Windows installer named `Hermes-Hub-Setup-<version>-x64.exe` on the GitHub Releases page. The installer creates Start Menu and Desktop shortcuts and keeps application data when uninstalling by default.
 
-Release builds check GitHub Releases in the background. Use **Settings → Application Updates → GitHub Update** to download, verify, install, and restart in one step. Development builds intentionally disable release updates.
+Release builds check GitHub Releases in the background. Use **Settings → Application Updates → Update** to download, verify, install, and restart in one step, or enable automatic installation for hands-free updates. Development builds intentionally disable release updates.
 
 > Windows SmartScreen may warn on the initial unsigned releases. Confirm that the installer was downloaded from this repository's official GitHub Release and verify the attached checksum before running it. The build configuration is ready for certificate-based signing when a signing certificate is available.
 
 To publish a release, update the desktop package version, commit it, and push the matching tag:
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 ---
