@@ -47,6 +47,8 @@ import {
   ModelPriceInfo,
   OnboardingState,
   OverallStats,
+  RequirementId,
+  RequirementsInstallResult,
   RuntimeHealth,
   RecoveryArtifact,
   SavedSearch,
@@ -92,6 +94,8 @@ declare global {
       getTailscaleState: () => Promise<TailscaleState>;
       pingTailscalePeer: (ipOrHost: string) => Promise<{ success: boolean; latencyMs?: number; via?: string }>;
       getSyncthingState: () => Promise<SyncthingState>;
+      installRequirements: (ids: RequirementId[]) => Promise<RequirementsInstallResult>;
+      openRequirementDownload: (id: RequirementId) => Promise<boolean>;
       addDevice: (data: Partial<Device>) => Promise<Device>;
       removeDevice: (id: string) => Promise<boolean>;
       compareDevices: (aId: string, bId: string) => Promise<any>;

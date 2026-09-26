@@ -2,6 +2,24 @@ export type OperatingSystem = 'windows' | 'macos' | 'linux';
 export type SyncStatusType = 'in-sync' | 'syncing' | 'pending' | 'offline' | 'conflict';
 export type HealthStatusType = 'healthy' | 'warning' | 'degraded' | 'offline';
 
+export type RequirementId = 'tailscale' | 'syncthing';
+
+export type RequirementInstallState = 'installed' | 'manual-required' | 'failed';
+
+export interface RequirementInstallResult {
+  id: RequirementId;
+  label: string;
+  packageId: string;
+  state: RequirementInstallState;
+  message: string;
+}
+
+export interface RequirementsInstallResult {
+  success: boolean;
+  results: RequirementInstallResult[];
+  message: string;
+}
+
 export interface TailscalePeer {
   id: string;
   hostname: string;
@@ -328,6 +346,7 @@ export type ActivityEventType =
   | 'baseline_adopted'
   | 'update_checked'
   | 'repository_sync'
+  | 'requirements_installed'
   | 'health_warning'
   | 'search_reindexed';
 

@@ -150,7 +150,7 @@ Renders this bundled handbook inside Hermes Hub with navigation, rich Markdown f
 - Permission to install a per-user application.
 - Internet access only for GitHub update checks/downloads.
 - Hermes Agent recommended; onboarding can continue if it is missing.
-- Tailscale and Syncthing are optional until peer networking or transport is needed.
+- Tailscale and Syncthing are optional until peer networking or transport is needed. On Windows, Settings can install either official package—or both missing requirements—with one guided click through Windows Package Manager. Windows may request administrator approval. After installation, sign in to Tailscale and approve the intended Syncthing devices and `HermesHubData` folder; Hermes Hub never creates third-party accounts or accepts trust prompts for you.
 
 The installed app does not require Git, Node.js, pnpm, or a source checkout.
 

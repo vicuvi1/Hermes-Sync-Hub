@@ -63,6 +63,8 @@ export const IPC_CHANNELS = {
 
   // Milestone 5 Syncthing Integration channels
   GET_SYNCTHING_STATE: 'hermes-hub:get-syncthing-state',
+  INSTALL_REQUIREMENTS: 'hermes-hub:install-requirements',
+  OPEN_REQUIREMENT_DOWNLOAD: 'hermes-hub:open-requirement-download',
 
   // Milestone 6 Device Management channels
   ADD_DEVICE: 'hermes-hub:add-device',

@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
-import type { ModelPriceInfo, SavedSearch, SearchIndexStatus, SearchQuery, SearchResult, UpdateHermesMemoryInput, VaultEnvironmentProfile, VaultSetupInput, VaultUnlockInput } from '@hermes-hub/types';
+import type { ModelPriceInfo, RequirementId, RequirementsInstallResult, SavedSearch, SearchIndexStatus, SearchQuery, SearchResult, UpdateHermesMemoryInput, VaultEnvironmentProfile, VaultSetupInput, VaultUnlockInput } from '@hermes-hub/types';
 
 // Expose safe, typed API to Renderer process
 contextBridge.exposeInMainWorld('hermesHub', {
@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('hermesHub', {
   getTailscaleState: () => ipcRenderer.invoke(IPC_CHANNELS.GET_TAILSCALE_STATE),
   pingTailscalePeer: (ipOrHost: string) => ipcRenderer.invoke(IPC_CHANNELS.PING_TAILSCALE_PEER, ipOrHost),
   getSyncthingState: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SYNCTHING_STATE),
+  installRequirements: (ids: RequirementId[]): Promise<RequirementsInstallResult> => ipcRenderer.invoke(IPC_CHANNELS.INSTALL_REQUIREMENTS, ids),
+  openRequirementDownload: (id: RequirementId): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.OPEN_REQUIREMENT_DOWNLOAD, id),
   addDevice: (data: any) => ipcRenderer.invoke(IPC_CHANNELS.ADD_DEVICE, data),
   removeDevice: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.REMOVE_DEVICE, id),
   compareDevices: (aId: string, bId: string) => ipcRenderer.invoke(IPC_CHANNELS.COMPARE_DEVICES, aId, bId),

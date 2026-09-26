@@ -2,6 +2,14 @@
 
 All notable changes are documented here. The project uses semantic version tags.
 
+## 0.5.1 — One-click Windows requirements
+
+- Added a guided **Install missing requirements** action in Settings for Tailscale and Syncthing.
+- Added individual install and official-download actions for each integration.
+- Restricted the privileged installer to the exact official `Tailscale.Tailscale` and `Syncthing.Syncthing` Windows Package Manager IDs.
+- Added progress, completion, recovery guidance, activity logging, and automatic status refresh after installation.
+- Kept account sign-in, Syncthing folder approval, licenses, and Windows administrator confirmation under user control.
+
 ## 0.5.0 — Direct Hermes bridge
 
 ### Added

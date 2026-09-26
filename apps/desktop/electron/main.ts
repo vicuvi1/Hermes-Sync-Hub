@@ -11,6 +11,8 @@ import {
   HermesCredentialBridgeResult,
   ModelPriceInfo,
   OverallStats,
+  RequirementId,
+  RequirementsInstallResult,
   RuntimeHealth,
   SavedSearch,
   SearchDocument,
@@ -51,6 +53,7 @@ import { setupTray, destroyTray } from './tray.js';
 import { sendDesktopNotification } from './notifications.js';
 import { UpdateManager } from './updater.js';
 import { SourceRepositoryService } from './sourceRepository.js';
+import { installRequirements, REQUIREMENT_CATALOG, validateRequirementIds } from './requirementsInstaller.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -476,6 +479,27 @@ ipcMain.handle(IPC_CHANNELS.PING_TAILSCALE_PEER, async (_event, ipOrHost: string
 
 ipcMain.handle(IPC_CHANNELS.GET_SYNCTHING_STATE, async () => {
   return syncthingAdapter.getState();
+});
+
+ipcMain.handle(IPC_CHANNELS.INSTALL_REQUIREMENTS, async (_event, ids: unknown): Promise<RequirementsInstallResult> => {
+  const result = await installRequirements(ids);
+  activityService.record({
+    type: 'requirements_installed',
+    title: result.success ? 'PC requirements installed' : 'PC requirements need attention',
+    description: result.message,
+    sourceDevice: deviceIdentity.getLocalDevice().deviceName,
+    status: result.success ? 'success' : 'warning',
+    metadata: {
+      requirements: result.results.map((item) => `${item.label}:${item.state}`).join(', '),
+    },
+  });
+  return result;
+});
+
+ipcMain.handle(IPC_CHANNELS.OPEN_REQUIREMENT_DOWNLOAD, async (_event, value: unknown) => {
+  const [id] = validateRequirementIds([value]);
+  await shell.openExternal(REQUIREMENT_CATALOG[id as RequirementId].downloadUrl);
+  return true;
 });
 
 ipcMain.handle(IPC_CHANNELS.GET_DEVICES, async () => {

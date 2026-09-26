@@ -5,6 +5,8 @@ import {
   TailscaleState,
   TailscalePeer,
   SyncthingState,
+  RequirementId,
+  RequirementInstallResult,
 } from '@hermes-hub/types';
 import { formatBytes } from '@hermes-hub/shared';
 import { UpdateSettingsSection } from './UpdateSettingsSection';
@@ -103,6 +105,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   // Milestone 5: Syncthing state & transfer inspection
   const [copiedSyncId, setCopiedSyncId] = useState(false);
   const [isRefreshingSync, setIsRefreshingSync] = useState(false);
+  const [installingRequirements, setInstallingRequirements] = useState<RequirementId[]>([]);
+  const [requirementResults, setRequirementResults] = useState<Partial<Record<RequirementId, RequirementInstallResult>>>({});
+  const [requirementMessage, setRequirementMessage] = useState<string | null>(null);
   const effectiveSyncState: SyncthingState = syncthingState || {
     installed: false, running: false, apiUrl: '', devices: [], folders: [],
     connectionState: { totalConnections: 0, activeConnections: 0, connections: {} },
@@ -234,6 +239,43 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
+  const handleInstallRequirements = async (ids: RequirementId[]) => {
+    if (!window.hermesHub?.installRequirements || ids.length === 0) return;
+    const labels = ids.map((id) => id === 'tailscale' ? 'Tailscale' : 'Syncthing').join(' and ');
+    const confirmed = window.confirm(
+      `Install ${labels} using Windows Package Manager?\n\nThe official packages and their license terms apply. Windows may display an administrator approval prompt. Installation does not automatically sign in to Tailscale or configure Syncthing.`,
+    );
+    if (!confirmed) return;
+
+    setInstallingRequirements(ids);
+    setRequirementMessage(`Installing ${labels}… Keep Hermes Hub open and approve any Windows prompt.`);
+    try {
+      const result = await window.hermesHub.installRequirements(ids);
+      setRequirementResults((current) => ({
+        ...current,
+        ...Object.fromEntries(result.results.map((item) => [item.id, item])),
+      }));
+      setRequirementMessage(result.message);
+      await Promise.allSettled([
+        ids.includes('tailscale') && onRefreshTailscale ? onRefreshTailscale() : Promise.resolve(),
+        ids.includes('syncthing') && onRefreshSyncthing ? onRefreshSyncthing() : Promise.resolve(),
+      ]);
+    } catch (error) {
+      setRequirementMessage(error instanceof Error ? error.message : 'Installation could not be started.');
+    } finally {
+      setInstallingRequirements([]);
+    }
+  };
+
+  const handleOfficialDownload = async (id: RequirementId) => {
+    await window.hermesHub?.openRequirementDownload?.(id);
+  };
+
+  const missingRequirements: RequirementId[] = [
+    ...(!effectiveTsState.installed ? ['tailscale' as const] : []),
+    ...(!effectiveSyncState.installed ? ['syncthing' as const] : []),
+  ];
+
   return (
     <div className="space-y-6 pb-12 max-w-4xl">
       {/* Milestone 2: Local Device Agent Card */}
@@ -334,6 +376,35 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
 
+        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20">
+              <Download className={`h-4 w-4 ${installingRequirements.length ? 'animate-bounce' : ''}`} />
+            </div>
+            <div>
+              <div className="text-sm font-bold text-foreground">Set up this PC</div>
+              <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
+                Hermes Hub can install the official Tailscale and Syncthing packages with Windows Package Manager. You still control sign-in, device approval, and folder configuration.
+              </p>
+              {requirementMessage && (
+                <p className="text-xs mt-2 text-foreground" role="status" aria-live="polite">{requirementMessage}</p>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => handleInstallRequirements(missingRequirements)}
+            disabled={installingRequirements.length > 0 || missingRequirements.length === 0}
+            className="shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all disabled:opacity-50"
+          >
+            <Download className={`h-4 w-4 ${installingRequirements.length ? 'animate-pulse' : ''}`} />
+            {installingRequirements.length
+              ? 'Installing requirements…'
+              : missingRequirements.length
+                ? `Install ${missingRequirements.length === 2 ? 'missing requirements' : missingRequirements[0] === 'tailscale' ? 'Tailscale' : 'Syncthing'}`
+                : 'Requirements installed'}
+          </button>
+        </div>
+
         {/* Tailscale Full Status & Peer Mesh Card */}
         <div className="rounded-2xl border border-border bg-card/80 p-5 backdrop-blur-sm space-y-5 shadow-xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -366,8 +437,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             </div>
 
-            {/* Direct vs DERP stats badges */}
-            <div className="flex items-center gap-2 text-xs font-mono">
+            {/* Install action and Direct vs DERP stats badges */}
+            <div className="flex flex-wrap items-center justify-end gap-2 text-xs font-mono">
+              {!effectiveTsState.installed && (
+                <button
+                  onClick={() => handleInstallRequirements(['tailscale'])}
+                  disabled={installingRequirements.length > 0}
+                  className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground font-sans font-semibold inline-flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {installingRequirements.includes('tailscale') ? 'Installing…' : 'Install Tailscale'}
+                </button>
+              )}
+              {requirementResults.tailscale && requirementResults.tailscale.state !== 'installed' && (
+                <button onClick={() => handleOfficialDownload('tailscale')} className="px-3 py-1.5 rounded-lg border border-border bg-background font-sans font-semibold inline-flex items-center gap-1.5">
+                  Official download <ExternalLink className="h-3 w-3" />
+                </button>
+              )}
               <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1.5">
                 <Radio className="h-3 w-3" />
                 <span>{effectiveTsState.directPeersCount} Direct P2P</span>
@@ -407,7 +493,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="p-3 rounded-xl bg-muted/40 border border-border/40">
               <div className="text-[11px] text-muted-foreground uppercase font-bold">Tailscale CLI Version</div>
               <div className="text-sm font-semibold font-mono text-foreground mt-0.5">
-                {effectiveTsState.version ? `v${effectiveTsState.version}` : '1.74.0'}
+                {effectiveTsState.version ? `v${effectiveTsState.version}` : 'Not detected'}
               </div>
             </div>
           </div>
@@ -538,6 +624,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
+              {!effectiveSyncState.installed && (
+                <button
+                  onClick={() => handleInstallRequirements(['syncthing'])}
+                  disabled={installingRequirements.length > 0}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold disabled:opacity-50"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {installingRequirements.includes('syncthing') ? 'Installing…' : 'Install Syncthing'}
+                </button>
+              )}
+              {requirementResults.syncthing && requirementResults.syncthing.state !== 'installed' && (
+                <button onClick={() => handleOfficialDownload('syncthing')} className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-medium text-foreground">
+                  Official download <ExternalLink className="h-3 w-3" />
+                </button>
+              )}
               <button
                 onClick={handleRefreshSync}
                 disabled={isRefreshingSync}
@@ -548,7 +649,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </button>
               <button
                 onClick={() => window.open(effectiveSyncState.guiAddress || 'http://127.0.0.1:8384', '_blank')}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-medium text-foreground transition-colors"
+                disabled={!effectiveSyncState.running}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-medium text-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span>Open Web UI</span>
                 <ExternalLink className="h-3 w-3" />
@@ -562,29 +664,33 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className="text-[11px] text-muted-foreground uppercase font-bold">Local Syncthing Device ID</div>
               <div className="text-sm font-semibold font-mono text-foreground mt-0.5 flex items-center justify-between">
                 <span className="truncate max-w-[200px]" title={effectiveSyncState.myID || 'Not initialized'}>
-                  {effectiveSyncState.myID || 'SYNCTH-VCTR-DSKT-8942'}
+                  {effectiveSyncState.myID || 'Not initialized'}
                 </span>
-                <button
-                  onClick={() => handleCopySyncId(effectiveSyncState.myID || 'SYNCTH-VCTR-DSKT-8942')}
-                  className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                  title="Copy Syncthing Device ID"
-                >
-                  {copiedSyncId ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-                </button>
+                {effectiveSyncState.myID && (
+                  <button
+                    onClick={() => handleCopySyncId(effectiveSyncState.myID)}
+                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                    title="Copy Syncthing Device ID"
+                  >
+                    {copiedSyncId ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                  </button>
+                )}
               </div>
             </div>
 
             <div className="p-3 rounded-xl bg-muted/40 border border-border/40">
               <div className="text-[11px] text-muted-foreground uppercase font-bold">REST API Endpoint</div>
               <div className="text-sm font-semibold font-mono text-foreground mt-0.5 truncate">
-                {effectiveSyncState.apiUrl || 'http://127.0.0.1:8384'}
+                {effectiveSyncState.apiUrl || 'Unavailable'}
               </div>
             </div>
 
             <div className="p-3 rounded-xl bg-muted/40 border border-border/40">
               <div className="text-[11px] text-muted-foreground uppercase font-bold">Daemon Uptime & Engine</div>
               <div className="text-sm font-semibold font-mono text-foreground mt-0.5">
-                {effectiveSyncState.uptimeSeconds ? `${Math.round(effectiveSyncState.uptimeSeconds / 3600)}h uptime` : 'Active'} • Go-Engine
+                {effectiveSyncState.running
+                  ? `${effectiveSyncState.uptimeSeconds ? `${Math.round(effectiveSyncState.uptimeSeconds / 3600)}h uptime` : 'Running'} • Go engine`
+                  : 'Not running'}
               </div>
             </div>
           </div>
