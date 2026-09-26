@@ -169,32 +169,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
         }
       }
 
-      // Simulation fallback validator
-      const codeRegex = /^HERMES-[2-9A-Z]{4}-[2-9A-Z]{4}$/i;
-      if (codeRegex.test(trimmed) || trimmed.length > 30) {
-        const suffix = trimmed.slice(-4).toUpperCase();
-        setValidationResult({
-          valid: true,
-          invitation: {
-            code: trimmed.toUpperCase(),
-            issuer: {
-              deviceId: `dev-remote-${suffix.toLowerCase()}`,
-              deviceName: `Workstation-${suffix}`,
-              hostname: `HERMES-NODE-${suffix}`,
-              os: 'linux',
-              tailscaleIp: `100.84.12.${Math.floor(Math.random() * 80) + 40}`,
-              syncthingId: `SYNCTH-${suffix}-NODE-001`,
-              agentPort: 48199,
-            },
-            expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-          },
-        });
-      } else {
-        setValidationResult({
-          valid: false,
-          error: 'Format should be HERMES-XXXX-XXXX or encrypted pairing payload string.',
-        });
-      }
+      setValidationResult({ valid: false, error: 'Pairing validation is unavailable because the secure desktop bridge is not connected.' });
       setIsValidating(false);
     }, 300);
 
@@ -276,78 +251,11 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
           return;
         }
       } catch (err: any) {
-        console.warn('IPC execution error, using smooth pipeline simulation:', err);
+        setPairingError(err?.message || 'Pairing failed.');
       }
     }
 
-    // Interactive animated pipeline progression
-    for (let i = 0; i < stepDefs.length; i++) {
-      await new Promise((r) => setTimeout(r, 450));
-      setPairingSteps((prev) =>
-        prev.map((step, idx) => {
-          if (idx === i) {
-            return { ...step, status: 'completed', message: 'Verified ✓' };
-          }
-          if (idx === i + 1) {
-            return { ...step, status: 'in-progress' };
-          }
-          return step;
-        })
-      );
-    }
-
-    const issuer = validationResult.invitation.issuer;
-    const newDevice: Device = {
-      deviceId: issuer.deviceId || `dev-paired-${Date.now().toString(36)}`,
-      deviceName: issuer.deviceName,
-      hostname: issuer.hostname,
-      os: issuer.os,
-      architecture: 'x64',
-      appVersion: '0.1.0',
-      agentVersion: '0.1.0',
-      online: true,
-      lastSeen: new Date().toISOString(),
-      tailscale: {
-        installed: true,
-        connected: true,
-        ip: issuer.tailscaleIp || '100.84.12.88',
-        connectionType: 'direct',
-        peersCount: 4,
-      },
-      syncthing: {
-        installed: true,
-        running: true,
-        deviceId: issuer.syncthingId || `SYNCTH-${issuer.hostname.slice(0, 4)}-PAIR`,
-        version: 'v1.27.12',
-        foldersCount: 2,
-      },
-      hermes: {
-        installed: true,
-        running: true,
-        version: '0.21.5',
-        home: issuer.os === 'windows' ? 'C:\\Users\\User\\AppData\\Local\\hermes' : '/home/user/.hermes',
-        profile: 'default',
-      },
-      data: {
-        sessions: 42,
-        memories: 16,
-        skills: 10,
-        totalSizeBytes: 88 * 1024 * 1024,
-      },
-      sync: {
-        lastSync: new Date().toISOString(),
-        pendingFiles: 0,
-        filesTransferred: 56,
-        bytesUploaded: 88 * 1024 * 1024,
-        bytesDownloaded: 88 * 1024 * 1024,
-        conflicts: 0,
-        status: 'in-sync',
-      },
-      lastBackup: new Date().toISOString(),
-      healthStatus: 'healthy',
-    };
-
-    setPairedDeviceResult(newDevice);
+    setPairingError('Pairing did not complete. Review Tailscale, Syncthing, and the invitation, then retry.');
     setIsPairing(false);
   };
 
@@ -363,61 +271,52 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
     if (!manualName.trim()) return;
 
     const host = manualHostname.trim() || manualName.toUpperCase().replace(/\s+/g, '-');
-    const defaultHome =
-      manualOs === 'windows'
-        ? `C:\\Users\\User\\AppData\\Local\\hermes`
-        : manualOs === 'macos'
-        ? `/Users/user/.hermes`
-        : `/home/user/.hermes`;
-
     const newDevice: Device = {
       deviceId: `dev-man-${Date.now().toString(36)}`,
       deviceName: manualName.trim(),
       hostname: host,
       os: manualOs,
       architecture: manualOs === 'macos' ? 'arm64' : 'x64',
-      appVersion: '0.1.0',
-      agentVersion: '0.1.0',
-      online: true,
+      appVersion: 'unknown',
+      agentVersion: 'unknown',
+      online: false,
       lastSeen: new Date().toISOString(),
       tailscale: {
-        installed: true,
-        connected: true,
-        ip: manualIp.trim() || `100.84.12.${Math.floor(Math.random() * 80) + 40}`,
-        connectionType: 'direct',
-        peersCount: 3,
+        installed: false,
+        connected: false,
+        ip: manualIp.trim() || undefined,
+        connectionType: 'unknown',
+        peersCount: 0,
       },
       syncthing: {
-        installed: true,
-        running: true,
-        deviceId: `SYNCTH-${host.slice(0, 4).toUpperCase()}-NODE-${Date.now().toString().slice(-4)}`,
-        version: 'v1.27.12',
-        foldersCount: 2,
+        installed: false,
+        running: false,
+        foldersCount: 0,
       },
       hermes: {
-        installed: true,
-        running: true,
-        version: '0.21.5',
-        home: manualHermesHome.trim() || defaultHome,
+        installed: false,
+        running: false,
+        version: 'unknown',
+        home: manualHermesHome.trim(),
         profile: 'default',
       },
       data: {
-        sessions: 24,
-        memories: 8,
-        skills: 5,
-        totalSizeBytes: 52 * 1024 * 1024,
+        sessions: 0,
+        memories: 0,
+        skills: 0,
+        totalSizeBytes: 0,
       },
       sync: {
         lastSync: new Date().toISOString(),
         pendingFiles: 0,
-        filesTransferred: 32,
-        bytesUploaded: 52 * 1024 * 1024,
-        bytesDownloaded: 52 * 1024 * 1024,
+        filesTransferred: 0,
+        bytesUploaded: 0,
+        bytesDownloaded: 0,
         conflicts: 0,
-        status: 'in-sync',
+        status: 'offline',
       },
-      lastBackup: new Date().toISOString(),
-      healthStatus: 'healthy',
+      lastBackup: '',
+      healthStatus: 'offline',
     };
 
     onDeviceAdded(newDevice);

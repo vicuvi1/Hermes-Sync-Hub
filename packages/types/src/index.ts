@@ -244,7 +244,13 @@ export type ActivityEventType =
   | 'device_disconnect'
   | 'session_imported'
   | 'backup_created'
-  | 'conflict_detected';
+  | 'conflict_detected'
+  | 'baseline_published'
+  | 'baseline_adopted'
+  | 'update_checked'
+  | 'repository_sync'
+  | 'health_warning'
+  | 'search_reindexed';
 
 export interface ActivityEvent {
   id: string;
@@ -257,6 +263,80 @@ export interface ActivityEvent {
   bytesTransferred?: number;
   filesCount?: number;
   status: 'success' | 'warning' | 'error' | 'info';
+  metadata?: Record<string, string | number | boolean | undefined>;
+}
+
+export type SearchEntityKind =
+  | 'session'
+  | 'memory'
+  | 'skill'
+  | 'file'
+  | 'device'
+  | 'backup'
+  | 'activity'
+  | 'setting'
+  | 'action';
+
+export interface AppLocation {
+  tab: 'dashboard' | 'devices' | 'sessions' | 'memory' | 'skills' | 'files' | 'vault' | 'activity' | 'backups' | 'settings' | 'help';
+  entityId?: string;
+  query?: string;
+  section?: string;
+}
+
+export interface SearchDocument {
+  id: string;
+  kind: SearchEntityKind;
+  title: string;
+  subtitle?: string;
+  body: string;
+  keywords?: string[];
+  updatedAt?: string;
+  deviceName?: string;
+  location: AppLocation;
+}
+
+export interface SearchFilter {
+  kinds?: SearchEntityKind[];
+  deviceNames?: string[];
+}
+
+export interface SearchQuery {
+  text: string;
+  filter?: SearchFilter;
+  limit?: number;
+}
+
+export interface SearchResult {
+  document: SearchDocument;
+  score: number;
+  matchedTerms: string[];
+  excerpt: string;
+}
+
+export interface SearchIndexStatus {
+  state: 'empty' | 'indexing' | 'ready' | 'failed';
+  documentCount: number;
+  lastIndexedAt?: string;
+  indexVersion: number;
+  message: string;
+}
+
+export interface SavedSearch {
+  id: string;
+  name: string;
+  query: SearchQuery;
+  createdAt: string;
+}
+
+export type CommandSafety = 'read-only' | 'confirmation-required' | 'developer-only';
+
+export interface CommandDefinition {
+  id: string;
+  label: string;
+  description: string;
+  safety: CommandSafety;
+  location?: AppLocation;
 }
 
 export interface ActiveTransfer {
@@ -294,16 +374,24 @@ export interface ConflictItem {
   id: string;
   filePath: string;
   detectedAt: string;
+  state?: 'both-changed' | 'renamed' | 'deleted' | 'transport-conflict';
+  baselineHash?: string;
+  originDevice?: string;
+  deletionState?: 'none' | 'local-deleted' | 'remote-deleted';
+  diffPreview?: string;
+  rollbackArtifactPath?: string;
   leftVersion: {
     deviceName: string;
     modifiedAt: string;
     hash: string;
+    revision?: number;
     snippet: string;
   };
   rightVersion: {
     deviceName: string;
     modifiedAt: string;
     hash: string;
+    revision?: number;
     snippet: string;
   };
 }
@@ -669,6 +757,21 @@ export interface AppSettings {
   hermesHome?: string;
   workspacePath?: string;
   repositoryWorkspacePath?: string;
+  developerMode: boolean;
+  savedSearches: SavedSearch[];
+  recentSearches: string[];
+  searchIndexVersion: number;
+}
+
+export interface RecoveryArtifact {
+  id: string;
+  kind: 'local-recovery' | 'conflict-recovery' | 'quarantine';
+  name: string;
+  createdAt: string;
+  filePath: string;
+  filesCount: number;
+  restorable: boolean;
+  description: string;
 }
 
 export interface MeshSyncPolicy {

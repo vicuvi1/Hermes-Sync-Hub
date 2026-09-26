@@ -21,10 +21,9 @@ HermesHubData/
 │   └── web-research/
 ├── configs/
 │   └── config.template.yaml
-├── vault/
-│   └── secrets.vault.enc
 ├── snapshots/
-│   └── state-export-rev142.jsonl
+│   ├── conflict-recovery-.../
+│   └── pre-baseline-orphans-.../
 ├── backups/
 │   └── hub-backup-2026-09-26.tar.gz
 └── activity/
@@ -48,10 +47,12 @@ Each synchronized object tracks:
 ### Conflict Detection Strategy
 - When two devices edit the same file concurrently before a sync cycle completes:
   1. The file hashes will diverge while both claim a successor revision.
-  2. Hermes Hub tags the conflict in the local SQLite metadata:
-     `status: "CONFLICT"`, tracking both `leftVersion` and `rightVersion`.
+2. Hermes Hub compares both sides with the last per-device baseline hash and writes the unresolved record to managed conflict metadata, tracking `leftVersion`, `rightVersion`, deletion state, origin, and the baseline hash.
   3. The conflict is surfaced in the UI:
      - Clear visual diff comparison.
      - Fast resolution actions: `Use Desktop`, `Use Zenbook`, or `Keep Both`.
-  4. Automatic line merging is permitted ONLY for clear, append-only logs or Markdown memory blocks when AST analysis indicates non-overlapping additions.
-  5. Live SQLite files are NEVER merged; only safe snapshots and exported records are compared.
+  4. Before a confirmed resolution, both versions are copied to a `conflict-recovery-*` artifact. Deletion is propagated only after an explicit local/remote choice and is recorded as a tombstone.
+  5. Automatic content merging is not part of the v0.3 beta; ambiguous changes always require a choice.
+  6. Live SQLite files are NEVER merged; only supported safe files and exported records are compared.
+
+Vault files, master keys, live databases, diagnostics, credentials, and tokens are never stored in `HermesHubData`.

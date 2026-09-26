@@ -338,6 +338,24 @@ describe('Milestone 9: Safe File-Based Synchronization Engine', () => {
   });
 
   describe('Main PC baseline and ongoing two-way file sharing', () => {
+    it('preserves simultaneous edits as a revision conflict instead of overwriting either version', async () => {
+      await syncEngine.executeSyncCycle();
+      const localMemory = path.join(hermesHome, 'memories', 'user-preferences.md');
+      const workspaceMemory = path.join(workspaceService.getLayout().memories, 'user-preferences.md');
+      fs.writeFileSync(localMemory, '# Local independent edit\n', 'utf-8');
+      fs.writeFileSync(workspaceMemory, '# Remote independent edit\n', 'utf-8');
+
+      const result = await syncEngine.executeSyncCycle();
+      const conflict = result.conflicts.find((item) => item.filePath === 'memories/user-preferences.md');
+      expect(conflict?.state).toBe('both-changed');
+      expect(fs.readFileSync(localMemory, 'utf-8')).toContain('Local independent edit');
+      expect(fs.readFileSync(workspaceMemory, 'utf-8')).toContain('Remote independent edit');
+
+      const resolution = await syncEngine.resolveConflict(conflict!.id, 'keep_both');
+      expect(resolution.success).toBe(true);
+      expect(resolution.message).toContain('Recovery copy');
+    });
+
     it('propagates the newer safe memory in either direction', async () => {
       await syncEngine.executeSyncCycle();
       const localMemory = path.join(hermesHome, 'memories', 'user-preferences.md');

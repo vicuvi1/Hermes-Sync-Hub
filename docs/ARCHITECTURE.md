@@ -45,10 +45,10 @@ Hermes Hub operates completely peer-to-peer (P2P) and local-first. There is no c
 | :--- | :--- | :--- |
 | **Desktop App** | Electron, React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons | Responsive, high-performance GUI, system tray, quick actions, secret management |
 | **Device Agent** | Node.js / TypeScript, OS daemons | Background health monitoring, local snapshot generation, adapters, status reporting |
-| **Local Metadata** | SQLite (Better-SQLite3) | Known devices, file revisions, sync records, audit history, backups (never replaces Hermes's internal DB) |
+| **Local Metadata** | Atomic JSON files | Known devices, file revisions, activity, settings, search index, and backup metadata (never replaces Hermes's internal DB) |
 | **Transport** | Syncthing REST API + Native Syncthing Core | P2P block-level file synchronization, conflict detection, NAT traversal |
 | **Mesh Network** | Tailscale (CLI / Local API) | Zero-config WireGuard VPN mesh, device reachability, authenticated IP addressing |
-| **Security Vault** | OS Keychain (Win Credential Manager / Keychain / Secret Service) + AES-256-GCM | Encrypted-at-rest credential storage, selective reveal/copy |
+| **Security Vault** | Electron `safeStorage` on Windows + AES-256-GCM | Encrypted-at-rest credential storage, selective reveal/copy |
 
 ---
 
@@ -81,7 +81,6 @@ Hermes Hub enforces a strict boundary between **Live Data** and **Hub Sync Works
 | ├── skills/             (Normalized portable skill trees)               |
 | ├── configs/            (Sanitized configuration templates)             |
 | ├── sessions/           (Exported portable session JSONL & transcripts) |
-| ├── vault/              (Encrypted secrets payload)                     |
 | └── snapshots/          (Atomic atomic SQLite vacuum snapshots)         |
 +-------------------------------------------------------------------------+
                                  ▲
@@ -92,9 +91,9 @@ Hermes Hub enforces a strict boundary between **Live Data** and **Hub Sync Works
 +-------------------------------------------------------------------------+
 ```
 
-1. **Snapshot Creation**: The Agent creates clean, consistent snapshots (using SQLite online backup API or `VACUUM INTO`) before any state export.
-2. **Deterministic Manifesting**: Every file placed into the sync workspace receives a SHA-256 hash, revision number, timestamp, and origin device signature.
-3. **Safe Ingestion**: When new revisions arrive from peer devices via Syncthing, the local Hermes Hub Agent inspects, validates, checks for conflicts, and updates the local metadata before prompting or safely merging into the live Hermes installation.
+1. **Snapshot Creation**: The Agent creates safe exported snapshot records without copying live SQLite/WAL/SHM files into transport.
+2. **Deterministic Manifesting**: Every supported file placed into the sync workspace receives a SHA-256 hash, revision number, timestamp, and origin-device metadata.
+3. **Safe Ingestion**: When revisions arrive through Syncthing, the local Agent validates supported staged files and preserves ambiguous states for review instead of treating live databases as mergeable files.
 
 ---
 
@@ -128,8 +127,8 @@ In a peer-to-peer ecosystem with no central server:
 
 ## 6. Security Principles
 
-1. **Secrets Encrypted at Rest**: Sensitive environment variables (`OPENROUTER_API_KEY`, tokens) are encrypted before entering the sync workspace using AES-256-GCM.
-2. **OS Keychain Integration**: Master keys are stored directly in Windows Credential Manager, macOS Keychain, or Linux Secret Service via `node-keytar` or native safe-storage APIs.
+1. **Secrets Encrypted at Rest**: Vault values are encrypted locally with AES-256-GCM and are never placed in the shared workspace or search index.
+2. **Windows User Protection**: The random Vault master key is protected with Electron `safeStorage` for the current Windows user.
 3. **No Central Telemetry or Leakage**: All logs redact known key prefixes and sensitive tokens before writing to disk or exporting diagnostics.
 4. **Git Hygiene**: Strict `.gitignore` rules prevent any accidental tracking of workspace files, SQLite databases, or credentials.
 

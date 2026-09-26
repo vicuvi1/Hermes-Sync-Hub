@@ -27,6 +27,17 @@ jobs:
         run: pnpm test
       - name: Package installer
         run: pnpm --filter @hermes-hub/desktop exec electron-builder --win nsis --x64 --publish never
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+      - name: Create checksums and software bill of materials
+        shell: pwsh
+        run: |
+          pnpm list --recursive --json | Out-File -Encoding utf8 release/sbom.cyclonedx-compatible.json
+          Get-ChildItem release -File | Where-Object { $_.Name -match '\.(exe|blockmap|yml)$' } | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)"
+          } | Out-File -Encoding ascii release/SHA256SUMS.txt
       - name: Publish GitHub release assets
         shell: pwsh
         run: |
@@ -35,8 +46,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --verify-tag --title "Hermes Hub $tag" --notes "Hermes Hub $tag"
           }
-          $assets = Get-ChildItem release -File | Where-Object { $_.Name -match '\.(exe|blockmap|yml)$' }
-          if ($assets.Count -lt 3) { throw "Expected installer, blockmap, and latest.yml; found $($assets.Count) assets." }
+          $assets = Get-ChildItem release -File | Where-Object { $_.Name -match '\.(exe|blockmap|yml|txt|json)$' }
+          if ($assets.Count -lt 5) { throw "Expected installer, update metadata, checksums, and SBOM; found $($assets.Count) assets." }
           foreach ($asset in $assets) {
             gh release upload $tag $asset.FullName --clobber
             if ($LASTEXITCODE -ne 0) { throw "Failed to upload $($asset.Name)" }

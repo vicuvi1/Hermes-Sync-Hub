@@ -5,6 +5,7 @@ import {
   MeshSyncActionResult,
   MeshSyncPolicy,
   MeshSyncStatus,
+  RecoveryArtifact,
 } from '@hermes-hub/types';
 import { WorkspaceService } from '../workspace/WorkspaceService.js';
 import { DeviceRegistryService } from '../devices/DeviceRegistry.js';
@@ -98,6 +99,52 @@ export class MeshCoordinatorService {
       note: 'Local-only safe file recovery bundle. Secrets, Vault files, and live databases are excluded.',
     }, null, 2), 'utf-8');
     return { id, path: recoveryRoot, files: fileRecords.length };
+  }
+
+  listRecoveryArtifacts(): RecoveryArtifact[] {
+    const artifacts: RecoveryArtifact[] = [];
+    const scan = (root: string, kind: RecoveryArtifact['kind'], prefix: string, restorable: boolean) => {
+      if (!fs.existsSync(root)) return;
+      for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+        if (!entry.isDirectory() || !entry.name.startsWith(prefix)) continue;
+        const filePath = path.join(root, entry.name);
+        let filesCount = 0;
+        const count = (directory: string) => { for (const child of fs.readdirSync(directory, { withFileTypes: true })) child.isDirectory() ? count(path.join(directory, child.name)) : filesCount++; };
+        count(filePath);
+        const stat = fs.statSync(filePath);
+        artifacts.push({ id: entry.name, kind, name: entry.name, createdAt: stat.birthtime.toISOString(), filePath, filesCount, restorable, description: kind === 'local-recovery' ? 'Safe local files captured before baseline adoption.' : kind === 'conflict-recovery' ? 'Both versions preserved before conflict resolution.' : 'Workspace-only files preserved before publishing a new baseline.' });
+      }
+    };
+    scan(path.join(this.deviceRegistry.getStorageDirectory(), 'recovery'), 'local-recovery', 'local-recovery-', true);
+    scan(this.workspaceService.getLayout().snapshots, 'conflict-recovery', 'conflict-recovery-', false);
+    scan(this.workspaceService.getLayout().snapshots, 'quarantine', 'pre-baseline-orphans-', false);
+    return artifacts.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async restoreRecoveryArtifact(id: string, confirmed: boolean): Promise<{ success: boolean; message: string; backupId?: string }> {
+    if (!confirmed) throw new Error('Recovery restore requires explicit confirmation.');
+    if (!/^local-recovery-[0-9]+$/.test(id)) throw new Error('Only verified local recovery bundles can be restored automatically.');
+    const artifact = this.listRecoveryArtifacts().find((item) => item.id === id && item.restorable);
+    if (!artifact) throw new Error('Recovery artifact was not found.');
+    const manifestPath = path.join(artifact.filePath, 'recovery-manifest.json');
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as { files: Array<{ relativePath: string; sha256: string }> };
+    for (const record of manifest.files) {
+      const source = path.resolve(artifact.filePath, record.relativePath);
+      if (!source.startsWith(path.resolve(artifact.filePath) + path.sep) || isRestrictedSqliteFile(source)) throw new Error('Recovery manifest contains an unsafe path.');
+      const actual = crypto.createHash('sha256').update(fs.readFileSync(source)).digest('hex');
+      if (actual !== record.sha256) throw new Error(`Recovery verification failed for ${record.relativePath}.`);
+    }
+    const safetyBackup = await this.backupService.createBackup({ name: `Before recovery restore ${new Date().toISOString()}` });
+    const hermesHome = await this.syncEngine.resolveHermesHome();
+    if (!hermesHome) throw new Error('Hermes home could not be found.');
+    for (const record of manifest.files) {
+      const source = path.resolve(artifact.filePath, record.relativePath);
+      const destination = path.resolve(hermesHome, record.relativePath);
+      if (!destination.startsWith(path.resolve(hermesHome) + path.sep)) throw new Error('Recovery destination is outside Hermes home.');
+      fs.mkdirSync(path.dirname(destination), { recursive: true });
+      fs.copyFileSync(source, destination);
+    }
+    return { success: true, message: `Restored ${manifest.files.length} verified file(s). A safety backup was created first.`, backupId: safetyBackup.id };
   }
 
   async getStatus(): Promise<MeshSyncStatus> {

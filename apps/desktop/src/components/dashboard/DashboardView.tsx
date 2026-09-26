@@ -1,5 +1,5 @@
 import React from 'react';
-import { Device, OverallStats, ActiveTransfer, ActivityEvent } from '@hermes-hub/types';
+import { Device, OverallStats, ActiveTransfer, ActivityEvent, HermesMemory, HermesSession } from '@hermes-hub/types';
 import { DeviceCard } from './DeviceCard';
 import { StatsGrid } from './StatsGrid';
 import { TransferWidget } from './TransferWidget';
@@ -11,6 +11,8 @@ interface DashboardViewProps {
   stats: OverallStats;
   activeTransfer: ActiveTransfer | null;
   recentActivity: ActivityEvent[];
+  recentSessions?: HermesSession[];
+  recentMemories?: HermesMemory[];
   onSelectDevice: (device: Device) => void;
   onSyncDevice: (device: Device) => void;
   onAddDevice: () => void;
@@ -22,6 +24,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   stats,
   activeTransfer,
   recentActivity,
+  recentSessions = [],
+  recentMemories = [],
   onSelectDevice,
   onSyncDevice,
   onAddDevice,
@@ -68,6 +72,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
         <StatsGrid stats={stats} />
       </div>
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between"><h2 className="text-xs uppercase tracking-wider font-bold text-muted-foreground">Continue working</h2><button onClick={() => onNavigateTab('sessions')} className="text-xs font-medium text-primary hover:underline">Open Command Center with Ctrl+K</button></div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {recentSessions.slice(0, 2).map((session) => <button key={session.id} onClick={() => onNavigateTab('sessions')} className="rounded-xl border border-border bg-card/70 p-4 text-left hover:border-primary/40"><span className="text-[10px] font-bold uppercase tracking-wider text-primary">Recent session</span><span className="mt-2 block truncate text-sm font-semibold">{session.title}</span><span className="mt-1 block text-xs text-muted-foreground">{formatTimeAgo(session.updatedAt)} · {session.model}</span></button>)}
+          {recentMemories.slice(0, 1).map((memory) => <button key={memory.id} onClick={() => onNavigateTab('memory')} className="rounded-xl border border-border bg-card/70 p-4 text-left hover:border-primary/40"><span className="text-[10px] font-bold uppercase tracking-wider text-violet-500">Changed memory</span><span className="mt-2 block truncate text-sm font-semibold">{memory.title}</span><span className="mt-1 block text-xs text-muted-foreground">{formatTimeAgo(memory.updatedAt)}</span></button>)}
+          {stats.conflictsCount > 0 ? <button onClick={() => onNavigateTab('files')} className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-left"><span className="text-[10px] font-bold uppercase tracking-wider text-rose-500">Needs attention</span><span className="mt-2 block text-sm font-semibold">{stats.conflictsCount} sync conflict{stats.conflictsCount === 1 ? '' : 's'}</span><span className="mt-1 block text-xs text-muted-foreground">Review before synchronizing.</span></button> : <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4"><span className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">Recovery state</span><span className="mt-2 block text-sm font-semibold">No conflicts reported</span><span className="mt-1 block text-xs text-muted-foreground">Ambiguous changes are never silently approved.</span></div>}
+          {!recentSessions.length && !recentMemories.length && <div className="md:col-span-2 rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">Recent real work will appear here after Hermes data is detected. Demo content is never substituted in production mode.</div>}
+        </div>
+      </section>
 
       {/* Active Transfer Banner (if any) */}
       {activeTransfer && (

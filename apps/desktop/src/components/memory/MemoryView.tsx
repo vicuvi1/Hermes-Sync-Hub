@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HermesMemory, Device } from '@hermes-hub/types';
 import { formatTimeAgo } from '@hermes-hub/shared';
 import {
@@ -7,23 +7,18 @@ import {
   CheckCircle2,
   Clock,
   Laptop,
-  FileEdit,
-  History,
-  GitCompare,
-  Save,
-  RotateCcw,
 } from 'lucide-react';
 
 interface MemoryViewProps {
   memories: HermesMemory[];
   devices: Device[];
+  initialSelectedMemoryId?: string;
 }
 
-export const MemoryView: React.FC<MemoryViewProps> = ({ memories, devices }) => {
+export const MemoryView: React.FC<MemoryViewProps> = ({ memories, devices, initialSelectedMemoryId }) => {
   const [selectedMemory, setSelectedMemory] = useState<HermesMemory>(memories[0]);
   const [search, setSearch] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(selectedMemory?.content || '');
+  useEffect(() => { const requested = memories.find((memory) => memory.id === initialSelectedMemoryId); if (requested) setSelectedMemory(requested); }, [initialSelectedMemoryId, memories]);
 
   const filteredMemories = memories.filter(
     (m) =>
@@ -33,8 +28,6 @@ export const MemoryView: React.FC<MemoryViewProps> = ({ memories, devices }) => 
 
   const handleSelectMemory = (mem: HermesMemory) => {
     setSelectedMemory(mem);
-    setEditedContent(mem.content);
-    setIsEditing(false);
   };
 
   return (
@@ -110,40 +103,7 @@ export const MemoryView: React.FC<MemoryViewProps> = ({ memories, devices }) => 
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                {isEditing ? (
-                  <>
-                    <button
-                      onClick={() => setIsEditing(false)}
-                      className="px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-medium text-muted-foreground"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => {
-                        selectedMemory.content = editedContent;
-                        selectedMemory.revision += 1;
-                        setIsEditing(false);
-                      }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90"
-                    >
-                      <Save className="h-3.5 w-3.5" />
-                      <span>Save Revision</span>
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setEditedContent(selectedMemory.content);
-                      setIsEditing(true);
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-medium text-foreground transition-colors"
-                  >
-                    <FileEdit className="h-3.5 w-3.5 text-primary" />
-                    <span>Edit Note</span>
-                  </button>
-                )}
-              </div>
+              <span className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">Read-only live view</span>
             </div>
 
             {/* Device Sync Matrix (Per User Spec: Desktop ✓, Zenbook ✓, Laptop 3 pending) */}
@@ -177,17 +137,7 @@ export const MemoryView: React.FC<MemoryViewProps> = ({ memories, devices }) => 
 
             {/* Content Body */}
             <div className="flex-1 overflow-y-auto">
-              {isEditing ? (
-                <textarea
-                  value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
-                  className="w-full h-full p-4 rounded-xl bg-background border border-border font-mono text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none leading-relaxed"
-                />
-              ) : (
-                <div className="p-4 rounded-xl bg-muted/20 border border-border/40 font-mono text-xs text-foreground whitespace-pre-wrap leading-relaxed h-full overflow-y-auto">
-                  {selectedMemory.content}
-                </div>
-              )}
+              <div className="p-4 rounded-xl bg-muted/20 border border-border/40 font-mono text-xs text-foreground whitespace-pre-wrap leading-relaxed h-full overflow-y-auto">{selectedMemory.content}</div>
             </div>
           </div>
         ) : null}

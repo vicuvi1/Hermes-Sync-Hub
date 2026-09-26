@@ -6,6 +6,7 @@ import {
   ClusterManifest,
   ManifestVerificationResult,
   SafeSnapshotRecord,
+  ConflictItem,
 } from '@hermes-hub/types';
 import { formatBytes, formatTimeAgo } from '@hermes-hub/shared';
 import {
@@ -31,6 +32,7 @@ import {
 
 interface FilesViewProps {
   files: HermesFile[];
+  initialSelectedFileId?: string;
 }
 
 const CATEGORIES: (HermesFileCategory | 'All')[] = [
@@ -42,7 +44,7 @@ const CATEGORIES: (HermesFileCategory | 'All')[] = [
   'Logs',
 ];
 
-export const FilesView: React.FC<FilesViewProps> = ({ files }) => {
+export const FilesView: React.FC<FilesViewProps> = ({ files, initialSelectedFileId }) => {
   const [selectedCategory, setSelectedCategory] = useState<HermesFileCategory | 'All'>('All');
   const [search, setSearch] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -56,6 +58,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ files }) => {
   const [snapshots, setSnapshots] = useState<SafeSnapshotRecord[]>([]);
   const [showSnapshotsSection, setShowSnapshotsSection] = useState(false);
   const [bannerMessage, setBannerMessage] = useState<string | null>(null);
+  const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
+  const [resolvingConflict, setResolvingConflict] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadWorkspaceData() {
@@ -79,7 +83,20 @@ export const FilesView: React.FC<FilesViewProps> = ({ files }) => {
     }
 
     loadWorkspaceData();
+    window.hermesHub?.getSyncConflicts?.().then(setConflicts).catch(() => undefined);
   }, []);
+  useEffect(() => { const requested = files.find((file) => file.id === initialSelectedFileId); if (requested) setSearch(requested.name); }, [initialSelectedFileId, files]);
+
+  const resolveConflict = async (conflict: ConflictItem, resolution: 'use_local' | 'use_remote' | 'keep_both') => {
+    if (!window.hermesHub?.resolveSyncConflict) { setBannerMessage('Conflict resolution is unavailable because the secure desktop bridge is not connected.'); return; }
+    setResolvingConflict(conflict.id);
+    try {
+      const result = await window.hermesHub.resolveSyncConflict(conflict.id, resolution);
+      setBannerMessage(result.message);
+      setConflicts(await window.hermesHub.getSyncConflicts());
+    } catch (error: any) { setBannerMessage(`Conflict resolution failed: ${error?.message || 'Unknown error'}`); }
+    finally { setResolvingConflict(null); }
+  };
 
   const handleVerifyIntegrity = async () => {
     setIsVerifying(true);
@@ -97,17 +114,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ files }) => {
       }
     }
 
-    // Simulation fallback
-    await new Promise((r) => setTimeout(r, 600));
-    setVerificationResult({
-      valid: true,
-      verifiedAt: new Date().toISOString(),
-      totalChecked: files.length,
-      matchingCount: files.length,
-      tamperedFiles: [],
-      missingFiles: [],
-    });
-    setBannerMessage(`Workspace integrity verified: ${files.length} files match manifest digests ✓`);
+    setBannerMessage('Integrity verification is unavailable because the secure desktop bridge is not connected.');
     setIsVerifying(false);
   };
 
@@ -124,10 +131,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ files }) => {
       } catch (err: any) {
         setBannerMessage(`Failed to generate manifest: ${err.message}`);
       }
-    } else {
-      await new Promise((r) => setTimeout(r, 500));
-      setBannerMessage('Manifest regenerated across workspace subdirectories ✓');
-    }
+    } else setBannerMessage('Manifest generation is unavailable because the secure desktop bridge is not connected.');
     setIsGeneratingManifest(false);
   };
 
@@ -147,23 +151,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ files }) => {
       } catch (err: any) {
         setBannerMessage(`Failed to create snapshot: ${err.message}`);
       }
-    } else {
-      await new Promise((r) => setTimeout(r, 800));
-      const mockSnap: SafeSnapshotRecord = {
-        id: `snap-${Date.now()}`,
-        name: `Safe Snapshot ${new Date().toLocaleTimeString()}`,
-        createdAt: new Date().toISOString(),
-        originDevice: 'dev-desktop-01',
-        sourceDatabases: ['state.db', 'kanban.db'],
-        sizeBytes: 12400000,
-        sha256: 'sha256-e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-        recordCounts: { sessions: 189, memories: 44, skills: 16, projects: 2 },
-        isClean: true,
-        filePath: 'snapshots/state-snapshot-manual.json',
-      };
-      setSnapshots([mockSnap, ...snapshots]);
-      setBannerMessage(`Safe non-destructive snapshot created (${mockSnap.name}) ✓`);
-    }
+    } else setBannerMessage('Snapshot creation is unavailable because the secure desktop bridge is not connected.');
     setIsTakingSnapshot(false);
   };
 
@@ -290,6 +278,15 @@ export const FilesView: React.FC<FilesViewProps> = ({ files }) => {
           </button>
         </div>
       )}
+
+      {conflicts.length > 0 && <section className="space-y-3 rounded-2xl border border-rose-500/25 bg-rose-500/5 p-5">
+        <div><h3 className="font-bold text-foreground">Conflict Center</h3><p className="mt-1 text-xs text-muted-foreground">Both versions stay preserved. Every resolution creates a local recovery copy before changing either file.</p></div>
+        {conflicts.map((conflict) => <div key={conflict.id} className="rounded-xl border border-border bg-background p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-sm font-semibold">{conflict.filePath}</div><div className="mt-1 text-[10px] uppercase tracking-wider text-rose-500">{conflict.state || 'both-changed'} · detected {formatTimeAgo(conflict.detectedAt)}</div></div></div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2"><div className="rounded-lg border border-border p-3"><div className="text-[10px] font-bold uppercase text-muted-foreground">Local · {conflict.leftVersion.deviceName}</div><pre className="mt-2 whitespace-pre-wrap break-words text-xs text-foreground">{conflict.leftVersion.snippet || '(empty or deleted)'}</pre><div className="mt-2 truncate font-mono text-[10px] text-muted-foreground">{conflict.leftVersion.hash}</div></div><div className="rounded-lg border border-border p-3"><div className="text-[10px] font-bold uppercase text-muted-foreground">Remote · {conflict.rightVersion.deviceName}</div><pre className="mt-2 whitespace-pre-wrap break-words text-xs text-foreground">{conflict.rightVersion.snippet || '(empty or deleted)'}</pre><div className="mt-2 truncate font-mono text-[10px] text-muted-foreground">{conflict.rightVersion.hash}</div></div></div>
+          <div className="mt-3 flex flex-wrap justify-end gap-2"><button disabled={resolvingConflict === conflict.id} onClick={() => resolveConflict(conflict, 'use_local')} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted disabled:opacity-50">Keep local</button><button disabled={resolvingConflict === conflict.id} onClick={() => resolveConflict(conflict, 'use_remote')} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted disabled:opacity-50">Keep remote</button><button disabled={resolvingConflict === conflict.id} onClick={() => resolveConflict(conflict, 'keep_both')} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50">Keep both</button></div>
+        </div>)}
+      </section>}
 
       {/* Safe Snapshots Toggle & Panel */}
       <div className="flex items-center justify-between">

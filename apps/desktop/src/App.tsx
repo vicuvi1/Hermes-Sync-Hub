@@ -31,6 +31,7 @@ import {
 import {
   ActivityEvent,
   ActiveTransfer,
+  AppLocation,
   AppSettings,
   AppUpdateProgress,
   BackupRecord,
@@ -45,6 +46,11 @@ import {
   OnboardingState,
   OverallStats,
   RuntimeHealth,
+  RecoveryArtifact,
+  SavedSearch,
+  SearchIndexStatus,
+  SearchQuery,
+  SearchResult,
   SourceRepositoryPushInput,
   SourceRepositoryResult,
   SourceRepositoryStatus,
@@ -104,6 +110,14 @@ declare global {
       getSkills: () => Promise<HermesSkill[]>;
       getFiles: () => Promise<HermesFile[]>;
       getActivity: () => Promise<ActivityEvent[]>;
+      getRecoveryArtifacts: () => Promise<RecoveryArtifact[]>;
+      restoreRecoveryArtifact: (id: string, confirmed: boolean) => Promise<{ success: boolean; message: string; backupId?: string }>;
+      searchAll: (query: SearchQuery) => Promise<SearchResult[]>;
+      reindexSearch: () => Promise<SearchIndexStatus>;
+      getSearchIndexStatus: () => Promise<SearchIndexStatus>;
+      saveSearch: (input: Pick<SavedSearch, 'name' | 'query'>) => Promise<SavedSearch>;
+      deleteSavedSearch: (id: string) => Promise<boolean>;
+      onSearchIndexStatus: (callback: (status: SearchIndexStatus) => void) => () => void;
       getSessionDetail: (sessionId: string) => Promise<any>;
       exportSession: (options: any) => Promise<any>;
       importSession: (payload: any) => Promise<any>;
@@ -162,6 +176,7 @@ export const App: React.FC = () => {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
   const [updateStatus, setUpdateStatus] = useState<AppUpdateProgress | null>(null);
   const [demoMode, setDemoMode] = useState(false);
+  const [location, setLocation] = useState<AppLocation>({ tab: 'dashboard' });
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -426,6 +441,26 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleCheckUpdates = async () => {
+    if (!window.hermesHub) return;
+    try {
+      const result = await window.hermesHub.checkForUpdates();
+      setUpdateStatus(result);
+      showNotification(result.message);
+    } catch (error: any) {
+      showNotification(`Update check failed: ${error?.message || 'Unknown error'}`);
+    }
+  };
+
+  const handleNavigate = (next: AppLocation) => {
+    setLocation(next);
+    setCurrentTab(next.tab);
+    if (next.tab === 'devices' && next.entityId) {
+      const device = devices.find((item) => item.deviceId === next.entityId);
+      if (device) setSelectedDeviceModal(device);
+    }
+  };
+
   const handleSaveSecret = async (secret: VaultSecret) => {
     if (demoMode) {
       setVaultSecrets((current) => [secret, ...current.filter((item) => item.id !== secret.id)]);
@@ -507,6 +542,8 @@ export const App: React.FC = () => {
               stats={stats}
               activeTransfer={activeTransfer}
               recentActivity={activity}
+              recentSessions={sessions}
+              recentMemories={memories}
               onSelectDevice={(d) => setSelectedDeviceModal(d)}
               onSyncDevice={handleSyncDevice}
               onAddDevice={() => setIsAddDeviceOpen(true)}
@@ -523,17 +560,17 @@ export const App: React.FC = () => {
             />
           )}
 
-          {currentTab === 'sessions' && <SessionsView sessions={sessions} />}
+          {currentTab === 'sessions' && <SessionsView sessions={sessions} initialSelectedSessionId={location.tab === 'sessions' ? location.entityId : undefined} />}
 
           {currentTab === 'memory' && (
-            <MemoryView memories={memories} devices={devices} />
+            <MemoryView memories={memories} devices={devices} initialSelectedMemoryId={location.tab === 'memory' ? location.entityId : undefined} />
           )}
 
           {currentTab === 'skills' && (
-            <SkillsView skills={skills} devices={devices} />
+            <SkillsView skills={skills} devices={devices} initialSelectedSkillId={location.tab === 'skills' ? location.entityId : undefined} />
           )}
 
-          {currentTab === 'files' && <FilesView files={files} />}
+          {currentTab === 'files' && <FilesView files={files} initialSelectedFileId={location.tab === 'files' ? location.entityId : undefined} />}
 
           {currentTab === 'vault' && (
             <VaultView secrets={vaultSecrets} onSaveSecret={handleSaveSecret} onRevealSecret={handleRevealSecret} onDeleteSecret={handleDeleteSecret} />
@@ -542,7 +579,7 @@ export const App: React.FC = () => {
           {currentTab === 'activity' && <ActivityView activities={activity} />}
 
           {currentTab === 'backups' && (
-            <BackupsView backups={backups} onCreateBackup={handleCreateBackup} />
+            <BackupsView backups={backups} onCreateBackup={handleCreateBackup} initialSection={location.tab === 'backups' ? location.section as 'archives' | 'revisions' | 'recovery' | undefined : undefined} />
           )}
 
           {currentTab === 'settings' && (
@@ -580,8 +617,10 @@ export const App: React.FC = () => {
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
-        onNavigate={setCurrentTab}
+        onNavigate={handleNavigate}
         onSync={handleSyncNow}
+        onCreateBackup={handleCreateBackup}
+        onCheckUpdates={handleCheckUpdates}
         onAddDevice={() => setIsAddDeviceOpen(true)}
       />
 

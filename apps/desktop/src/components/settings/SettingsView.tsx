@@ -5,8 +5,6 @@ import {
   TailscaleState,
   TailscalePeer,
   SyncthingState,
-  SyncthingDevice,
-  SyncthingFolder,
 } from '@hermes-hub/types';
 import { formatBytes } from '@hermes-hub/shared';
 import { UpdateSettingsSection } from './UpdateSettingsSection';
@@ -51,156 +49,6 @@ interface SettingsViewProps {
   onRefreshSyncthing?: () => Promise<void>;
 }
 
-const SIMULATED_TAILSCALE: TailscaleState = {
-  installed: true,
-  connected: true,
-  backendState: 'Running',
-  version: '1.74.0',
-  self: {
-    id: 'ts-self-01',
-    hostname: 'VICTOR-WORKSTATION',
-    dnsName: 'victor-workstation.hermes-mesh.ts.net',
-    tailscaleIps: ['100.84.12.19', 'fd7a:115c:a1e0::13'],
-    ipv4: '100.84.12.19',
-    ipv6: 'fd7a:115c:a1e0::13',
-    online: true,
-  },
-  peers: [
-    {
-      id: 'ts-peer-02',
-      hostname: 'VICTOR-ZENBOOK',
-      dnsName: 'victor-zenbook.hermes-mesh.ts.net',
-      os: 'windows',
-      tailscaleIps: ['100.84.12.20'],
-      ipv4: '100.84.12.20',
-      online: true,
-      active: true,
-      curAddr: '192.168.1.45:41641',
-      connectionType: 'direct',
-      lastSeen: new Date().toISOString(),
-    },
-    {
-      id: 'ts-peer-03',
-      hostname: 'UBUNTU-LAPTOP-THINKPAD',
-      dnsName: 'ubuntu-laptop.hermes-mesh.ts.net',
-      os: 'linux',
-      tailscaleIps: ['100.84.12.35'],
-      ipv4: '100.84.12.35',
-      online: true,
-      active: false,
-      relay: 'derp-3',
-      connectionType: 'derp-relay',
-      lastSeen: new Date(Date.now() - 3600 * 1000).toISOString(),
-    },
-  ],
-  tailnetName: 'victor@hermes.mesh',
-  magicDnsSuffix: 'hermes-mesh.ts.net',
-  directPeersCount: 1,
-  relayedPeersCount: 1,
-};
-
-const SIMULATED_SYNCTHING: SyncthingState = {
-  installed: true,
-  running: true,
-  version: 'v1.27.12',
-  myID: 'SYNCTH-VCTR-DSKT-8942-A83B-K4LM-91XQ-Z7WV',
-  guiAddress: 'http://127.0.0.1:8384',
-  apiUrl: 'http://127.0.0.1:8384',
-  uptimeSeconds: 84200,
-  devices: [
-    {
-      id: 'SYNCTH-VCTR-ZNBK-3819-B21C-P8QN-74KJ-M2WP',
-      name: 'VICTOR-ZENBOOK',
-      addresses: ['tcp://100.84.12.20:22000'],
-      connected: true,
-      address: '100.84.12.20:22000',
-      clientVersion: 'v1.27.12',
-      inBytesTotal: 184549376,
-      outBytesTotal: 410058752,
-      lastSeen: new Date().toISOString(),
-      paused: false,
-    },
-    {
-      id: 'SYNCTH-UBNT-THNK-9014-F92D-T5RA-38NE-K1PL',
-      name: 'UBUNTU-LAPTOP-THINKPAD',
-      addresses: ['dynamic'],
-      connected: false,
-      inBytesTotal: 0,
-      outBytesTotal: 0,
-      lastSeen: new Date(Date.now() - 3600 * 24 * 1000).toISOString(),
-      paused: false,
-    },
-  ],
-  folders: [
-    {
-      id: 'hermes-hub-data',
-      label: 'Hermes Hub Sync Workspace',
-      path: 'C:\\Users\\victo\\HermesHubData',
-      type: 'sendreceive',
-      state: 'idle',
-      globalFiles: 1420,
-      globalBytes: 391 * 1024 * 1024,
-      localFiles: 1420,
-      localBytes: 391 * 1024 * 1024,
-      needFiles: 0,
-      needBytes: 0,
-      pullErrors: 0,
-      paused: false,
-      devices: [
-        'SYNCTH-VCTR-ZNBK-3819-B21C-P8QN-74KJ-M2WP',
-        'SYNCTH-UBNT-THNK-9014-F92D-T5RA-38NE-K1PL',
-      ],
-    },
-    {
-      id: 'hermes-sessions',
-      label: 'Hermes Sessions Export',
-      path: 'C:\\Users\\victo\\HermesHubData\\sessions',
-      type: 'sendreceive',
-      state: 'idle',
-      globalFiles: 243,
-      globalBytes: 84 * 1024 * 1024,
-      localFiles: 243,
-      localBytes: 84 * 1024 * 1024,
-      needFiles: 0,
-      needBytes: 0,
-      pullErrors: 0,
-      paused: false,
-      devices: ['SYNCTH-VCTR-ZNBK-3819-B21C-P8QN-74KJ-M2WP'],
-    },
-  ],
-  connectionState: {
-    totalConnections: 2,
-    activeConnections: 1,
-    connections: {
-      'SYNCTH-VCTR-ZNBK-3819-B21C-P8QN-74KJ-M2WP': {
-        connected: true,
-        paused: false,
-        address: '100.84.12.20:22000',
-        type: 'TCP (Client)',
-        inBytesTotal: 184549376,
-        outBytesTotal: 410058752,
-        clientVersion: 'v1.27.12',
-      },
-      'SYNCTH-UBNT-THNK-9014-F92D-T5RA-38NE-K1PL': {
-        connected: false,
-        paused: false,
-        type: 'TCP',
-        inBytesTotal: 0,
-        outBytesTotal: 0,
-      },
-    },
-  },
-  transferState: {
-    inRateBytesPerSec: 0,
-    outRateBytesPerSec: 0,
-    totalNeedBytes: 0,
-    totalGlobalBytes: 475 * 1024 * 1024,
-    completionPercentage: 100,
-    isSyncing: false,
-    activeTransfers: [],
-  },
-};
-
 export const SettingsView: React.FC<SettingsViewProps> = ({
   onExportDiagnostics,
   agentHealth,
@@ -217,6 +65,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [closeToTray, setCloseToTray] = useState(true);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [demoMode, setDemoMode] = useState(false);
+  const [developerMode, setDeveloperMode] = useState(false);
   const [diagnosticsExported, setDiagnosticsExported] = useState(false);
   const [diagnosticsPath, setDiagnosticsPath] = useState<string | null>(null);
   const [pingLatency, setPingLatency] = useState<number | null>(null);
@@ -232,6 +81,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             setCloseToTray(s.closeToTray);
             setNotificationsEnabled(s.notificationsEnabled);
             setDemoMode(s.demoMode);
+            setDeveloperMode(s.developerMode);
           }
         } catch {}
       }
@@ -305,6 +155,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setDemoMode(val);
     if (window.hermesHub?.updateAppSettings) await window.hermesHub.updateAppSettings({ demoMode: val });
     window.location.reload();
+  };
+
+  const handleToggleDeveloperMode = async (val: boolean) => {
+    setDeveloperMode(val);
+    if (window.hermesHub?.updateAppSettings) await window.hermesHub.updateAppSettings({ developerMode: val });
   };
 
   const handlePing = async () => {
@@ -1021,6 +876,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${demoMode ? 'translate-x-5' : 'translate-x-0'}`} />
             </button>
           </div>
+
+          <div className="border-t border-border p-4 flex items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-semibold text-foreground">Developer Mode</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Expose fixed-repository Git pull/push controls. Publishing source changes can affect every contributor and always requires review and confirmation.</div>
+            </div>
+            <button onClick={() => handleToggleDeveloperMode(!developerMode)} className={`w-11 h-6 shrink-0 flex items-center rounded-full p-1 transition-colors ${developerMode ? 'bg-amber-500' : 'bg-muted'}`} aria-pressed={developerMode}>
+              <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${developerMode ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1028,7 +893,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       <UpdateSettingsSection />
 
       {/* Source repository developer workflow */}
-      <RepositorySyncSection />
+      {developerMode && <RepositorySyncSection />}
 
       {/* Diagnostics & Logs */}
       <div className="space-y-3">

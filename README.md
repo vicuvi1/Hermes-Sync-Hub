@@ -40,6 +40,7 @@ This handbook is bundled with every Windows release and is available inside the 
 
 Hermes Hub provides one place to:
 
+- Find and open local work instantly with a private universal Command Center.
 - Detect the local Hermes Agent installation and inspect its health.
 - Distinguish healthy, offline, unavailable, misconfigured, and failed services.
 - Register and pair trusted devices.
@@ -80,7 +81,13 @@ The renderer cannot execute shell commands, Git, or package-manager operations. 
 
 ### Dashboard
 
-Summarizes registered devices, online state, indexed content, pending files, conflicts, transfers, recent activity, and synchronization health.
+Summarizes registered devices, online state, indexed content, pending files, conflicts, transfers, recent activity, synchronization health, and a **Continue working** area for recent sessions, changed memories, and conflicts.
+
+### Universal Command Center
+
+Press `Ctrl+K` from anywhere to search session titles and messages, memories, skills, file metadata, devices, backups, activity, settings, and safe application actions. Results are grouped and keyboard-accessible, include source-device context, and deep-link to the selected entity. Searches run against an atomic local index under Hermes Hub application data. Recent and pinned searches stay local.
+
+Vault plaintext, credentials, API keys, live databases, diagnostics, and redacted originals are never indexed. Actions such as synchronization, backup creation, update checks, and pairing show a summary and require confirmation.
 
 ### Devices
 
@@ -101,11 +108,11 @@ Vault stores secrets in an AES-256-GCM encrypted file. A random master key is pr
 
 ### Activity and Backups
 
-Activity shows supported real events and remains empty when no provider is available. Backups creates atomic bundles, verifies archives, enforces retention, and restores through a pre-restore recovery snapshot.
+Activity is a persistent local journal for synchronization, backups, baselines, repository operations, indexing, and supported failures. It remains honestly empty before any event occurs. Backups creates atomic bundles, verifies archives, enforces retention, and restores through a pre-restore recovery snapshot.
 
 ### Settings
 
-Controls startup, tray behavior, notifications, backup preferences, Demo Mode, diagnostics, integration visibility, and application updates.
+Controls startup, tray behavior, notifications, backup preferences, Demo Mode, diagnostics, integration visibility, and application updates. Source Git pull/push controls appear only after explicitly enabling **Developer Mode**; the fixed destination is `https://github.com/vicuvi1/Hermes-Sync-Hub.git`.
 
 ### Help & README
 
@@ -184,7 +191,7 @@ Add it in **Vault**. Listings remain masked. Reveal or copy only when necessary 
 
 ### Quick actions
 
-Press `Ctrl+K` to open navigation and common actions, including Help.
+Press `Ctrl+K` to search every supported local entity and invoke confirmed safe actions. Use filters or pin a useful search for faster return visits.
 
 ## Main PC and multi-PC synchronization
 
@@ -512,8 +519,8 @@ Artifacts in `release/` include the installer, `latest.yml`, optional blockmap, 
 3. Create and push the matching annotated tag.
 
 ```powershell
-git tag -a v0.2.6 -m "Hermes Hub v0.2.6"
-git push origin v0.2.6
+git tag -a v0.3.0 -m "Hermes Hub v0.3.0"
+git push origin v0.3.0
 ```
 
 The desktop version and tag must match. Releases are currently unsigned. Never commit signing certificates, keys, or passwords.
@@ -552,12 +559,13 @@ Current limitations:
 - Windows x64 is the only production installer target.
 - Releases are unsigned.
 - Tailscale and Syncthing are installed/configured separately.
-- Advanced conflict workflows still need expansion.
+- Synchronization is public-beta quality: revision baselines, tombstones, recovery copies, and local/remote/keep-both resolution are implemented, but large binary and cross-platform rename workflows remain experimental.
+- Search is private lexical full-text search, not semantic search.
 - Updates require GitHub Releases access.
 
-Completed: desktop foundation, local agent, Hermes discovery, adapters, registry, pairing, workspace, manifests, safe sync, Main PC baseline onboarding, two-way safe-file propagation, sessions, encrypted Vault, backups, tray, diagnostics, onboarding, health, NSIS installer, manual/automatic updater, and in-app Help.
+Completed for v0.3 public beta: desktop foundation, local agent, Hermes discovery, adapters, registry, pairing, workspace, manifests, per-device sync baselines, conflict recovery/tombstones, Main PC baseline onboarding, two-way safe-file propagation, universal local Command Center, persistent activity, encrypted Vault, backups and recovery browsing, tray, diagnostics, onboarding, health, NSIS installer, manual/automatic updater, Developer Mode, and in-app Help.
 
-Planned: richer conflict resolution and merge previews, unified search, more granular category policies per device, Windows code signing, and evaluation of additional packaged platforms after Windows stabilizes.
+Planned: richer unified text diffs and rename matching, optional semantic search, more granular category policies per device, Windows code signing, and evaluation of additional packaged platforms after Windows stabilizes.
 
 ## Contributing
 

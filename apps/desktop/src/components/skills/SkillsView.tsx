@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HermesSkill, Device } from '@hermes-hub/types';
 import { formatTimeAgo } from '@hermes-hub/shared';
 import { Sparkles, Search, Files, Laptop, CheckCircle2, Tag, ArrowUpRight } from 'lucide-react';
@@ -6,10 +6,12 @@ import { Sparkles, Search, Files, Laptop, CheckCircle2, Tag, ArrowUpRight } from
 interface SkillsViewProps {
   skills: HermesSkill[];
   devices: Device[];
+  initialSelectedSkillId?: string;
 }
 
-export const SkillsView: React.FC<SkillsViewProps> = ({ skills, devices }) => {
+export const SkillsView: React.FC<SkillsViewProps> = ({ skills, devices, initialSelectedSkillId }) => {
   const [search, setSearch] = useState('');
+  useEffect(() => { const requested = skills.find((skill) => skill.id === initialSelectedSkillId); if (requested) setSearch(requested.name); }, [initialSelectedSkillId, skills]);
 
   const filteredSkills = skills.filter(
     (s) =>

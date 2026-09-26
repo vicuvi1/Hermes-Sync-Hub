@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BackupRecord, BackupVerificationResult, FileRevision } from '@hermes-hub/types';
+import { BackupRecord, BackupVerificationResult, FileRevision, RecoveryArtifact } from '@hermes-hub/types';
 import { formatBytes, formatTimeAgo } from '@hermes-hub/shared';
 import {
   Archive,
@@ -24,12 +24,14 @@ interface BackupsViewProps {
   backups: BackupRecord[];
   onCreateBackup: () => void;
   onRefresh?: () => void;
+  initialSection?: 'archives' | 'revisions' | 'recovery';
 }
 
 export const BackupsView: React.FC<BackupsViewProps> = ({
   backups: initialBackups,
   onCreateBackup,
   onRefresh,
+  initialSection,
 }) => {
   const [backups, setBackups] = useState<BackupRecord[]>(initialBackups);
   const [autoBackupsEnabled, setAutoBackupsEnabled] = useState(true);
@@ -39,7 +41,9 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
   const [restoreMessage, setRestoreMessage] = useState<string | null>(null);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [verificationResults, setVerificationResults] = useState<Record<string, BackupVerificationResult>>({});
-  const [activeTab, setActiveTab] = useState<'archives' | 'revisions'>('archives');
+  const [activeTab, setActiveTab] = useState<'archives' | 'revisions' | 'recovery'>('archives');
+  const [recoveryArtifacts, setRecoveryArtifacts] = useState<RecoveryArtifact[]>([]);
+  const [recoveryConfirmId, setRecoveryConfirmId] = useState<string | null>(null);
   const [revisions, setRevisions] = useState<FileRevision[]>([]);
   const [isLoadingRevisions, setIsLoadingRevisions] = useState(false);
   const [selectedRevisionFile, setSelectedRevisionFile] = useState<string>('memories/MEMORY.md');
@@ -47,7 +51,10 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
 
   useEffect(() => {
     setBackups(initialBackups);
+    window.hermesHub?.getRecoveryArtifacts?.().then(setRecoveryArtifacts).catch(() => undefined);
+    window.hermesHub?.getAppSettings?.().then((settings) => { setAutoBackupsEnabled(settings.autoBackupEnabled); setSchedule(settings.autoBackupFrequency); }).catch(() => undefined);
   }, [initialBackups]);
+  useEffect(() => { if (initialSection) setActiveTab(initialSection); }, [initialSection]);
 
   // Load revisions on mount and when tab changes
   useEffect(() => {
@@ -77,24 +84,7 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
       if (window.hermesHub?.verifyBackup) {
         const result = await window.hermesHub.verifyBackup(backupId);
         setVerificationResults((prev) => ({ ...prev, [backupId]: result }));
-      } else {
-        // Fallback simulation
-        setTimeout(() => {
-          setVerificationResults((prev) => ({
-            ...prev,
-            [backupId]: {
-              valid: true,
-              backupId,
-              checkedAt: new Date().toISOString(),
-              totalFiles: 4,
-              matchingFiles: 4,
-              errors: [],
-              missingFiles: [],
-              tamperedFiles: [],
-            },
-          }));
-        }, 500);
-      }
+      } else setRestoreMessage('Verification is unavailable because the secure desktop bridge is not connected.');
     } catch (err) {
       console.warn('Verification failed:', err);
     } finally {
@@ -115,9 +105,7 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
         } else {
           setRestoreMessage(`Restore blocked: ${result.error}`);
         }
-      } else {
-        setRestoreMessage('Backup restored successfully (simulated atomic restore) ✓');
-      }
+      } else setRestoreMessage('Restore is unavailable because the secure desktop bridge is not connected.');
     } catch (err: any) {
       setRestoreMessage(`Failed to restore: ${err.message}`);
     } finally {
@@ -132,9 +120,7 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
       if (window.hermesHub?.deleteBackup) {
         await window.hermesHub.deleteBackup(backupId);
         setBackups((prev) => prev.filter((b) => b.id !== backupId));
-      } else {
-        setBackups((prev) => prev.filter((b) => b.id !== backupId));
-      }
+      } else setRestoreMessage('Deletion is unavailable because the secure desktop bridge is not connected.');
     } catch (err) {
       console.warn('Failed to delete backup:', err);
     }
@@ -148,12 +134,24 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
         // Refresh revisions
         const updated = await window.hermesHub.getFileRevisions(selectedRevisionFile);
         if (updated?.revisions) setRevisions(updated.revisions);
-      } else {
-        setRollbackMessage(`Rolled back ${selectedRevisionFile} to revision #${targetRev} (simulated) ✓`);
-      }
+      } else setRollbackMessage('Rollback is unavailable because the secure desktop bridge is not connected.');
     } catch (err: any) {
       setRollbackMessage(`Rollback failed: ${err.message}`);
     }
+  };
+
+  const restoreRecovery = async (id: string) => {
+    setIsRestoring(true);
+    try {
+      const result = await window.hermesHub?.restoreRecoveryArtifact(id, true);
+      setRestoreMessage(result?.message || 'Recovery restore did not return a result.');
+      setRecoveryArtifacts(await window.hermesHub!.getRecoveryArtifacts());
+    } catch (error: any) { setRestoreMessage(`Recovery restore failed: ${error?.message || 'Unknown error'}`); }
+    finally { setIsRestoring(false); setRecoveryConfirmId(null); }
+  };
+  const updateBackupPreference = async (enabled: boolean, frequency: 'daily' | 'weekly' = schedule) => {
+    setAutoBackupsEnabled(enabled); setSchedule(frequency);
+    await window.hermesHub?.updateAppSettings({ autoBackupEnabled: enabled, autoBackupFrequency: frequency });
   };
 
   const latestBackup = backups[0];
@@ -232,7 +230,15 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
           <History className="h-3.5 w-3.5" />
           <span>Revision History & Rollback</span>
         </button>
+        <button onClick={() => setActiveTab('recovery')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${activeTab === 'recovery' ? 'bg-primary text-primary-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'}`}>
+          <ShieldCheck className="h-3.5 w-3.5" /><span>Recovery Center ({recoveryArtifacts.length})</span>
+        </button>
       </div>
+
+      {activeTab === 'recovery' && <div className="space-y-3">
+        <div className="rounded-xl border border-border bg-card/60 p-4"><h4 className="text-sm font-bold">Recovery Center</h4><p className="mt-1 text-xs text-muted-foreground">Browse baseline safety bundles, conflict copies, and quarantined workspace files. Only verified local recovery bundles can be restored automatically; other artifacts can be inspected from their folder.</p></div>
+        {recoveryArtifacts.length === 0 ? <div className="rounded-xl border border-dashed border-border p-8 text-center text-xs text-muted-foreground">No recovery artifacts exist yet.</div> : recoveryArtifacts.map((artifact) => <div key={artifact.id} className="flex flex-col gap-3 rounded-xl border border-border bg-card/70 p-4 md:flex-row md:items-center md:justify-between"><div><div className="flex items-center gap-2"><span className="text-sm font-semibold">{artifact.name}</span><span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase text-muted-foreground">{artifact.kind}</span></div><p className="mt-1 text-xs text-muted-foreground">{artifact.description}</p><div className="mt-2 font-mono text-[10px] text-muted-foreground">{artifact.filesCount} files · {formatTimeAgo(artifact.createdAt)} · {artifact.filePath}</div></div><div className="flex gap-2"><button onClick={() => window.hermesHub?.openFolder(artifact.filePath)} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted">Inspect folder</button>{artifact.restorable && <button onClick={() => setRecoveryConfirmId(artifact.id)} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Restore verified files</button>}</div></div>)}
+      </div>}
 
       {activeTab === 'archives' ? (
         <div className="space-y-6">
@@ -246,7 +252,7 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
                 </div>
               </div>
               <button
-                onClick={() => setAutoBackupsEnabled(!autoBackupsEnabled)}
+                onClick={() => void updateBackupPreference(!autoBackupsEnabled)}
                 className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
                   autoBackupsEnabled ? 'bg-primary' : 'bg-muted'
                 }`}
@@ -266,7 +272,7 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
               </div>
               <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
                 <button
-                  onClick={() => setSchedule('daily')}
+                  onClick={() => void updateBackupPreference(autoBackupsEnabled, 'daily')}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
                     schedule === 'daily'
                       ? 'bg-card text-foreground shadow-xs'
@@ -276,7 +282,7 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
                   Daily
                 </button>
                 <button
-                  onClick={() => setSchedule('weekly')}
+                  onClick={() => void updateBackupPreference(autoBackupsEnabled, 'weekly')}
                   className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
                     schedule === 'weekly'
                       ? 'bg-card text-foreground shadow-xs'
@@ -376,7 +382,7 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
             </div>
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'revisions' ? (
         /* Revision History Sub-Tab */
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card/60">
@@ -459,7 +465,7 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
             )}
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Restore Confirmation Dialog */}
       {restoreConfirmId && (
@@ -490,6 +496,7 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
           </div>
         </div>
       )}
+      {recoveryConfirmId && <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"><div className="w-full max-w-sm space-y-4 rounded-2xl border border-border bg-card p-6 shadow-xl"><div className="flex items-center gap-3"><AlertTriangle className="h-6 w-6 text-amber-500" /><h3 className="font-bold">Restore recovery bundle?</h3></div><p className="text-xs leading-relaxed text-muted-foreground">Hermes Hub will verify every SHA-256 hash, create a new safety backup of the current state, and only then restore the safe files. Live databases and secrets are excluded.</p><div className="flex justify-end gap-2"><button onClick={() => setRecoveryConfirmId(null)} className="rounded-lg border border-border px-3 py-2 text-xs">Cancel</button><button disabled={isRestoring} onClick={() => void restoreRecovery(recoveryConfirmId)} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50">{isRestoring ? 'Verifying…' : 'Verify, back up & restore'}</button></div></div></div>}
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
+import type { SavedSearch, SearchIndexStatus, SearchQuery, SearchResult } from '@hermes-hub/types';
 
 // Expose safe, typed API to Renderer process
 contextBridge.exposeInMainWorld('hermesHub', {
@@ -50,6 +51,18 @@ contextBridge.exposeInMainWorld('hermesHub', {
   getSkills: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SKILLS),
   getFiles: () => ipcRenderer.invoke(IPC_CHANNELS.GET_FILES),
   getActivity: () => ipcRenderer.invoke(IPC_CHANNELS.GET_ACTIVITY),
+  getRecoveryArtifacts: () => ipcRenderer.invoke(IPC_CHANNELS.GET_RECOVERY_ARTIFACTS),
+  restoreRecoveryArtifact: (id: string, confirmed: boolean) => ipcRenderer.invoke(IPC_CHANNELS.RESTORE_RECOVERY_ARTIFACT, id, confirmed),
+  searchAll: (query: SearchQuery): Promise<SearchResult[]> => ipcRenderer.invoke(IPC_CHANNELS.SEARCH_ALL, query),
+  reindexSearch: (): Promise<SearchIndexStatus> => ipcRenderer.invoke(IPC_CHANNELS.REINDEX_SEARCH),
+  getSearchIndexStatus: (): Promise<SearchIndexStatus> => ipcRenderer.invoke(IPC_CHANNELS.GET_SEARCH_INDEX_STATUS),
+  saveSearch: (input: Pick<SavedSearch, 'name' | 'query'>): Promise<SavedSearch> => ipcRenderer.invoke(IPC_CHANNELS.SAVE_SEARCH, input),
+  deleteSavedSearch: (id: string): Promise<boolean> => ipcRenderer.invoke(IPC_CHANNELS.DELETE_SAVED_SEARCH, id),
+  onSearchIndexStatus: (callback: (status: SearchIndexStatus) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: SearchIndexStatus) => callback(status);
+    ipcRenderer.on(IPC_CHANNELS.SEARCH_INDEX_STATUS, listener);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.SEARCH_INDEX_STATUS, listener);
+  },
   getSessionDetail: (sessionId: string) => ipcRenderer.invoke(IPC_CHANNELS.GET_SESSION_DETAIL, sessionId),
   exportSession: (options: any) => ipcRenderer.invoke(IPC_CHANNELS.EXPORT_SESSION, options),
   importSession: (payload: any) => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_SESSION, payload),

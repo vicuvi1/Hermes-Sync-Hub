@@ -1,0 +1,27 @@
+name: Bug report
+description: Report reproducible incorrect behavior without including private data
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Remove credentials, personal paths, session text, device IDs, and diagnostics secrets before submitting."
+  - type: input
+    id: version
+    attributes: { label: Hermes Hub version, placeholder: "0.3.0" }
+    validations: { required: true }
+  - type: dropdown
+    id: windows
+    attributes: { label: Windows version, options: ["Windows 11", "Windows 10"] }
+    validations: { required: true }
+  - type: textarea
+    id: description
+    attributes: { label: What happened?, description: Include expected and actual behavior. }
+    validations: { required: true }
+  - type: textarea
+    id: reproduce
+    attributes: { label: Reproduction steps }
+    validations: { required: true }
+  - type: textarea
+    id: logs
+    attributes: { label: Sanitized evidence, description: Do not paste secrets or personal Hermes content. }

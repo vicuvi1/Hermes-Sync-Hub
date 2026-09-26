@@ -16,6 +16,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   onboardingCompleted: false,
   autoCheckUpdates: true,
   autoInstallUpdates: false,
+  developerMode: false,
+  savedSearches: [],
+  recentSearches: [],
+  searchIndexVersion: 1,
 };
 
 export class SettingsManager {

@@ -74,6 +74,7 @@ export class SyncEngineService {
   private syncthingAdapter?: ISyncthingAdapter;
   private customHermesHome?: string;
   private activeConflicts: Map<string, ConflictItem> = new Map();
+  private protectedConflictPaths = new Set<string>();
   private lastSummary: DeviceSyncSummary;
 
   constructor(
@@ -112,6 +113,76 @@ export class SyncEngineService {
       return info.homePath;
     }
     return null;
+  }
+
+  private baselinePath(): string | null {
+    if (!this.deviceRegistry) return null;
+    return path.join(this.deviceRegistry.getStorageDirectory(), `sync-baseline-${this.deviceRegistry.getLocalDevice().deviceId}.json`);
+  }
+
+  private localPathFor(relativePath: string, hermesHome: string): string {
+    const [category, ...rest] = relativePath.split('/');
+    const relative = rest.join('/');
+    if (category === 'memories' && (relative === 'SOUL.md' || relative === 'MEMORY.md')) return path.join(hermesHome, relative);
+    if (category === 'configs') return path.join(hermesHome, relative);
+    return path.join(hermesHome, category, relative);
+  }
+
+  private detectRevisionConflicts(hermesHome: string, workspaceRoot: string): ConflictItem[] {
+    this.protectedConflictPaths.clear();
+    const baselinePath = this.baselinePath();
+    if (!baselinePath || !fs.existsSync(baselinePath)) return [];
+    let baseline: Record<string, string> = {};
+    try { baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf-8')).hashes || {}; } catch { return []; }
+    const conflicts: ConflictItem[] = [];
+    for (const [relativePath, baselineHash] of Object.entries(baseline)) {
+      const localPath = this.localPathFor(relativePath, hermesHome);
+      const workspacePath = path.join(workspaceRoot, relativePath);
+      const localExists = fs.existsSync(localPath);
+      const remoteExists = fs.existsSync(workspacePath);
+      const localHash = localExists ? this.workspaceService.calculateFileHash(localPath) : 'deleted';
+      const remoteHash = remoteExists ? this.workspaceService.calculateFileHash(workspacePath) : 'deleted';
+      if (!(localHash !== baselineHash && remoteHash !== baselineHash && localHash !== remoteHash)) continue;
+      const id = `revision-${crypto.createHash('sha256').update(relativePath).digest('hex').slice(0, 12)}`;
+      const conflict: ConflictItem = {
+        id, filePath: relativePath, detectedAt: new Date().toISOString(), baselineHash,
+        state: !localExists || !remoteExists ? 'deleted' : 'both-changed',
+        deletionState: !localExists ? 'local-deleted' : !remoteExists ? 'remote-deleted' : 'none',
+        originDevice: this.deviceRegistry?.getLocalDevice().deviceName,
+        diffPreview: `LOCAL: ${getFileSnippet(localPath)}\nREMOTE: ${getFileSnippet(workspacePath)}`,
+        leftVersion: { deviceName: this.deviceRegistry?.getLocalDevice().deviceName || 'Local', modifiedAt: localExists ? fs.statSync(localPath).mtime.toISOString() : new Date().toISOString(), hash: localHash, snippet: getFileSnippet(localPath) },
+        rightVersion: { deviceName: 'Managed workspace', modifiedAt: remoteExists ? fs.statSync(workspacePath).mtime.toISOString() : new Date().toISOString(), hash: remoteHash, snippet: getFileSnippet(workspacePath) },
+      };
+      conflicts.push(conflict); this.activeConflicts.set(id, conflict); this.protectedConflictPaths.add(relativePath);
+    }
+    return conflicts;
+  }
+
+  private saveRevisionBaseline(hermesHome: string, workspaceRoot: string): void {
+    const baselinePath = this.baselinePath();
+    if (!baselinePath) return;
+    let hashes: Record<string, string> = {};
+    try { hashes = JSON.parse(fs.readFileSync(baselinePath, 'utf-8')).hashes || {}; } catch {}
+    const scan = (directory: string) => {
+      if (!fs.existsSync(directory)) return;
+      for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+        const item = path.join(directory, entry.name);
+        if (entry.isDirectory()) scan(item);
+        else if (entry.isFile() && !isRestrictedSqliteFile(item)) {
+          const relative = path.relative(workspaceRoot, item).replace(/\\/g, '/');
+          if (!['skills', 'memories', 'configs'].includes(relative.split('/')[0])) continue;
+          const local = this.localPathFor(relative, hermesHome);
+          if (!fs.existsSync(local)) continue;
+          const workspaceHash = this.workspaceService.calculateFileHash(item);
+          if (this.workspaceService.calculateFileHash(local) === workspaceHash) hashes[relative] = workspaceHash;
+        }
+      }
+    };
+    scan(workspaceRoot);
+    fs.mkdirSync(path.dirname(baselinePath), { recursive: true });
+    const temporary = `${baselinePath}.tmp`;
+    fs.writeFileSync(temporary, JSON.stringify({ version: 1, savedAt: new Date().toISOString(), hashes }, null, 2), 'utf-8');
+    fs.renameSync(temporary, baselinePath);
   }
 
   /**
@@ -153,6 +224,11 @@ export class SyncEngineService {
           const localStat = fs.statSync(localPath);
           const localHash = this.workspaceService.calculateFileHash(localPath);
           const relWorkspace = `skills/${relInsideSkills}`;
+
+          if (this.protectedConflictPaths.has(relWorkspace)) {
+            actions.push({ relativePath: relWorkspace, category: 'skills', action: 'conflict', sha256: localHash, sizeBytes: localStat.size, message: 'Both local and remote changed since the last device baseline.' });
+            continue;
+          }
 
           let actionType: SyncFileAction['action'] = 'unchanged';
 
@@ -215,6 +291,11 @@ export class SyncEngineService {
         const workspaceTarget = path.join(workspaceMemoriesDir, fileName);
         const relWorkspace = `memories/${fileName}`;
 
+        if (this.protectedConflictPaths.has(relWorkspace)) {
+          actions.push({ relativePath: relWorkspace, category: 'memories', action: 'conflict', sha256: localHash, sizeBytes: localStat.size, message: 'Both local and remote changed since the last device baseline.' });
+          continue;
+        }
+
         let actionType: SyncFileAction['action'] = 'unchanged';
         if (!fs.existsSync(workspaceTarget)) {
           actionType = 'staged_new';
@@ -264,6 +345,11 @@ export class SyncEngineService {
             const localStat = fs.statSync(localPath);
             const localHash = this.workspaceService.calculateFileHash(localPath);
             const relWorkspace = `memories/${relInside}`;
+
+            if (this.protectedConflictPaths.has(relWorkspace)) {
+              actions.push({ relativePath: relWorkspace, category: 'memories', action: 'conflict', sha256: localHash, sizeBytes: localStat.size, message: 'Both local and remote changed since the last device baseline.' });
+              continue;
+            }
 
             let actionType: SyncFileAction['action'] = 'unchanged';
             if (!fs.existsSync(workspaceTarget)) {
@@ -331,6 +417,11 @@ export class SyncEngineService {
         const sanitizedBuffer = Buffer.from(sanitizedContent, 'utf-8');
         const sanitizedHash = `sha256-${crypto.createHash('sha256').update(sanitizedBuffer).digest('hex')}`;
 
+        if (this.protectedConflictPaths.has(relWorkspace)) {
+          actions.push({ relativePath: relWorkspace, category: 'configuration', action: 'conflict', sha256: sanitizedHash, sizeBytes: sanitizedBuffer.length, message: 'Both local and remote changed since the last device baseline.' });
+          continue;
+        }
+
         if (!fs.existsSync(workspaceTarget)) {
           actionType = 'staged_new';
           if (!dryRun) {
@@ -387,6 +478,7 @@ export class SyncEngineService {
 
             const rel = path.relative(workspaceLayout.skills, wsPath).replace(/\\/g, '/');
             const localDest = path.join(localSkillsDir, rel);
+            if (this.protectedConflictPaths.has(`skills/${rel}`)) continue;
 
             const wsStat = fs.statSync(wsPath);
             const wsHash = this.workspaceService.calculateFileHash(wsPath);
@@ -434,6 +526,7 @@ export class SyncEngineService {
           const localDest = relative === 'SOUL.md' || relative === 'MEMORY.md'
             ? path.join(hermesHome, relative)
             : path.join(localMemoriesDir, relative);
+          if (this.protectedConflictPaths.has(`memories/${relative}`)) continue;
           const wsStat = fs.statSync(wsPath);
           const wsHash = this.workspaceService.calculateFileHash(wsPath);
           const localMissing = !fs.existsSync(localDest);
@@ -553,9 +646,10 @@ export class SyncEngineService {
   async detectConflicts(
     workspaceRoot: string,
     hermesHome: string,
-    layout: WorkspaceStatus['layout']
+    layout: WorkspaceStatus['layout'],
+    existing: ConflictItem[] = []
   ): Promise<ConflictItem[]> {
-    const conflicts: ConflictItem[] = [];
+    const conflicts: ConflictItem[] = [...existing];
     const localDev = this.deviceRegistry ? this.deviceRegistry.getLocalDevice() : { deviceName: 'Local' };
 
     // 1. Scan for Syncthing conflict files (*.sync-conflict-*)
@@ -586,6 +680,10 @@ export class SyncEngineService {
             id: conflictId,
             filePath: relPath,
             detectedAt: new Date().toISOString(),
+            state: 'transport-conflict',
+            originDevice: 'Remote Syncthing Peer',
+            deletionState: 'none',
+            diffPreview: `LOCAL: ${getFileSnippet(originalPath)}\nREMOTE: ${getFileSnippet(full)}`,
             leftVersion: {
               deviceName: localDev.deviceName || 'Local Device',
               modifiedAt: origStat ? origStat.mtime.toISOString() : new Date().toISOString(),
@@ -625,7 +723,7 @@ export class SyncEngineService {
   async resolveConflict(
     conflictId: string,
     resolution: 'use_local' | 'use_remote' | 'keep_both'
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<{ success: boolean; message: string; recoveryArtifactPath?: string }> {
     const layout = this.workspaceService.getLayout();
     const root = this.workspaceService.getRootPath();
     const conflictsFile = path.join(layout.manifests, 'conflicts.json');
@@ -643,6 +741,10 @@ export class SyncEngineService {
     }
 
     const basePath = path.join(root, conflict.filePath);
+    const hermesHome = await this.resolveHermesHome();
+    const localOriginalPath = conflict.state && conflict.state !== 'transport-conflict' && hermesHome
+      ? this.localPathFor(conflict.filePath, hermesHome)
+      : basePath;
     const dir = path.dirname(basePath);
     const ext = path.extname(basePath);
     const baseStem = path.basename(basePath, ext);
@@ -659,7 +761,36 @@ export class SyncEngineService {
       }
     }
 
-    if (resolution === 'use_local') {
+    const recoveryDirectory = path.join(layout.snapshots, `conflict-recovery-${Date.now()}-${conflictId}`);
+    fs.mkdirSync(recoveryDirectory, { recursive: true });
+    if (fs.existsSync(localOriginalPath)) fs.copyFileSync(localOriginalPath, path.join(recoveryDirectory, `local${ext || '.txt'}`));
+    const remoteOriginalPath = conflict.state && conflict.state !== 'transport-conflict' ? basePath : conflictFilePath;
+    if (remoteOriginalPath && fs.existsSync(remoteOriginalPath)) fs.copyFileSync(remoteOriginalPath, path.join(recoveryDirectory, `remote${ext || '.txt'}`));
+    fs.writeFileSync(path.join(recoveryDirectory, 'conflict.json'), JSON.stringify({ ...conflict, selectedResolution: resolution, preservedAt: new Date().toISOString() }, null, 2), 'utf-8');
+
+    if (conflict.state && conflict.state !== 'transport-conflict') {
+      if (!hermesHome) throw new Error('Hermes home is unavailable for conflict resolution.');
+      if (resolution === 'use_local') {
+        if (!fs.existsSync(localOriginalPath)) {
+          if (fs.existsSync(basePath)) fs.unlinkSync(basePath);
+          this.recordTombstone(conflict.filePath, 'local', conflict.baselineHash);
+        } else {
+          fs.mkdirSync(path.dirname(basePath), { recursive: true });
+          fs.copyFileSync(localOriginalPath, basePath);
+        }
+      } else if (resolution === 'use_remote') {
+        if (!fs.existsSync(basePath)) {
+          if (fs.existsSync(localOriginalPath)) fs.unlinkSync(localOriginalPath);
+          this.recordTombstone(conflict.filePath, 'remote', conflict.baselineHash);
+        } else {
+          fs.mkdirSync(path.dirname(localOriginalPath), { recursive: true });
+          fs.copyFileSync(basePath, localOriginalPath);
+        }
+      } else {
+        if (fs.existsSync(basePath)) fs.copyFileSync(basePath, path.join(path.dirname(localOriginalPath), `${path.basename(localOriginalPath, ext)}.remote-${Date.now()}${ext}`));
+        if (fs.existsSync(localOriginalPath)) { fs.mkdirSync(path.dirname(basePath), { recursive: true }); fs.copyFileSync(localOriginalPath, basePath); }
+      }
+    } else if (resolution === 'use_local') {
       // Keep base file, delete conflict copy
       if (conflictFilePath && fs.existsSync(conflictFilePath)) {
         fs.unlinkSync(conflictFilePath);
@@ -696,8 +827,20 @@ export class SyncEngineService {
 
     return {
       success: true,
-      message: `Conflict for ${conflict.filePath} successfully resolved using ${resolution}`,
+      message: `Conflict for ${conflict.filePath} successfully resolved using ${resolution}. Recovery copy: ${recoveryDirectory}`,
+      recoveryArtifactPath: recoveryDirectory,
     };
+  }
+
+  private recordTombstone(relativePath: string, origin: 'local' | 'remote', baselineHash?: string): void {
+    const tombstonesPath = path.join(this.workspaceService.getLayout().manifests, 'tombstones.json');
+    let tombstones: Array<{ relativePath: string; deletedAt: string; origin: string; baselineHash?: string }> = [];
+    try { tombstones = JSON.parse(fs.readFileSync(tombstonesPath, 'utf-8')); } catch {}
+    tombstones = [{ relativePath, deletedAt: new Date().toISOString(), origin, baselineHash }, ...tombstones.filter((item) => item.relativePath !== relativePath)].slice(0, 2_000);
+    fs.mkdirSync(path.dirname(tombstonesPath), { recursive: true });
+    const temporary = `${tombstonesPath}.tmp`;
+    fs.writeFileSync(temporary, JSON.stringify(tombstones, null, 2), 'utf-8');
+    fs.renameSync(temporary, tombstonesPath);
   }
 
   /**
@@ -723,6 +866,8 @@ export class SyncEngineService {
 
     let bytesUploaded = 0;
     let bytesDownloaded = 0;
+    if (options.force) this.protectedConflictPaths.clear();
+    const revisionConflicts = hermesHome && !options.force ? this.detectRevisionConflicts(hermesHome, this.workspaceService.getRootPath()) : [];
 
     if (hermesHome) {
       if (options.force && !dryRun) {
@@ -785,8 +930,10 @@ export class SyncEngineService {
     const conflicts = await this.detectConflicts(
       this.workspaceService.getRootPath(),
       hermesHome || '',
-      layout
+      layout,
+      revisionConflicts
     );
+    if (hermesHome && !dryRun) this.saveRevisionBaseline(hermesHome, this.workspaceService.getRootPath());
 
     const completedAt = new Date().toISOString();
     const transferredCount = actions.filter((a) => a.action !== 'unchanged').length;

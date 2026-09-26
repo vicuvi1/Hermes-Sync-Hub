@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowRightLeft, CheckCircle2, Crown, DatabaseBackup, LoaderCircle, ShieldCheck } from 'lucide-react';
-import { Device, MeshSyncActionResult, MeshSyncStatus } from '@hermes-hub/types';
+import { Device, MeshSyncActionResult, MeshSyncStatus, RuntimeHealth, SyncthingState } from '@hermes-hub/types';
 
 interface MeshPrimaryPanelProps {
   devices: Device[];
@@ -13,6 +13,9 @@ export const MeshPrimaryPanel: React.FC<MeshPrimaryPanelProps> = ({ devices }) =
   const [actionConfirmed, setActionConfirmed] = useState(false);
   const [busy, setBusy] = useState<'load' | 'select' | 'publish' | 'adopt' | null>('load');
   const [notice, setNotice] = useState<{ success: boolean; message: string } | null>(null);
+  const [runtime, setRuntime] = useState<RuntimeHealth | null>(null);
+  const [syncthing, setSyncthing] = useState<SyncthingState | null>(null);
+  const [conflictCount, setConflictCount] = useState(0);
 
   const refresh = async () => {
     if (!window.hermesHub?.getMeshSyncStatus) return;
@@ -21,6 +24,10 @@ export const MeshPrimaryPanel: React.FC<MeshPrimaryPanelProps> = ({ devices }) =
       const next = await window.hermesHub.getMeshSyncStatus();
       setStatus(next);
       setSelectedId(next.policy?.primaryDeviceId || next.localDeviceId);
+      const [onboarding, syncState, conflicts] = await Promise.all([
+        window.hermesHub.getOnboardingState(), window.hermesHub.getSyncthingState(), window.hermesHub.getSyncConflicts(),
+      ]);
+      setRuntime(onboarding.runtime); setSyncthing(syncState); setConflictCount(conflicts.length);
     } catch (error) {
       setNotice({ success: false, message: error instanceof Error ? error.message : 'Could not load mesh policy.' });
     } finally {
@@ -73,6 +80,16 @@ export const MeshPrimaryPanel: React.FC<MeshPrimaryPanelProps> = ({ devices }) =
 
   const primary = devices.find((device) => device.deviceId === status?.policy?.primaryDeviceId);
   const active = Boolean(busy);
+  const sharedFolder = syncthing?.folders.find((folder) => folder.label.toLowerCase().includes('hermes') || folder.id.toLowerCase().includes('hermes'));
+  const preflight = [
+    { label: 'Hermes path', ok: runtime?.services.hermes.state === 'healthy' || runtime?.services.hermes.state === 'offline', detail: runtime?.services.hermes.detail || 'Not checked' },
+    { label: 'Workspace', ok: runtime?.services.workspace.state === 'healthy', detail: runtime?.services.workspace.detail || 'Not checked' },
+    { label: 'Syncthing', ok: Boolean(syncthing?.running), detail: syncthing?.running ? 'Running' : 'Install, start, and authenticate Syncthing' },
+    { label: 'HermesHubData folder', ok: sharedFolder?.type === 'sendreceive' && !sharedFolder.paused && sharedFolder.needFiles === 0 && sharedFolder.state === 'idle', detail: sharedFolder ? `${sharedFolder.path} · ${sharedFolder.type} · ${sharedFolder.needFiles} pending` : 'Create/share the intended HermesHubData folder' },
+    { label: 'Conflicts', ok: conflictCount === 0, detail: conflictCount ? `${conflictCount} conflict(s) must be resolved first` : 'No unresolved conflicts' },
+    { label: 'Backup readiness', ok: Boolean(status), detail: 'A recovery artifact is created before the operation' },
+  ];
+  const preflightReady = preflight.every((item) => item.ok);
 
   return <div className="rounded-2xl border border-primary/25 bg-primary/5 p-5 space-y-5">
     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -114,9 +131,11 @@ export const MeshPrimaryPanel: React.FC<MeshPrimaryPanelProps> = ({ devices }) =
         <div className="rounded-lg bg-background p-3 text-xs text-muted-foreground"><ArrowRightLeft className="mb-2 h-4 w-4 text-primary" /><strong className="block text-foreground">Then two-way</strong>After adoption, newer safe changes are shared back to every PC, including Main.</div>
       </div>
 
+      <div className="mt-4 rounded-xl border border-border bg-background p-3"><div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Preflight</div><div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{preflight.map((item) => <div key={item.label} className="flex items-start gap-2 text-xs"><span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${item.ok ? 'bg-emerald-500' : 'bg-amber-500'}`} /><span><strong className="block text-foreground">{item.label}</strong><span className="text-muted-foreground">{item.detail}</span></span></div>)}</div>{!preflightReady && <p className="mt-3 text-xs text-amber-600 dark:text-amber-300">Fix the highlighted checks before publishing or adopting a baseline. Refresh after Syncthing reaches idle Send &amp; Receive state.</p>}</div>
+
       {((status.localRole === 'primary' && status.canPublish) || status.canAdopt) && <>
         <label className="mt-4 flex cursor-pointer items-start gap-2 text-xs text-muted-foreground"><input type="checkbox" checked={actionConfirmed} onChange={(event) => setActionConfirmed(event.target.checked)} className="mt-0.5 h-4 w-4 accent-primary" /><span>{status.localRole === 'primary' ? 'I reviewed this PC and want its safe Hermes files to become the baseline.' : `I want to back up this PC, then overwrite matching safe files with ${status.policy.primaryDeviceName}'s baseline.`}</span></label>
-        <button onClick={status.localRole === 'primary' ? publish : adopt} disabled={active || !actionConfirmed} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">{busy === 'publish' || busy === 'adopt' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : status.localRole === 'primary' ? <ShieldCheck className="h-4 w-4" /> : <ArrowRightLeft className="h-4 w-4" />}{status.localRole === 'primary' ? 'Back Up & Publish Baseline' : 'Back Up & Copy Main PC'}</button>
+        <button onClick={status.localRole === 'primary' ? publish : adopt} disabled={active || !actionConfirmed || !preflightReady} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50">{busy === 'publish' || busy === 'adopt' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : status.localRole === 'primary' ? <ShieldCheck className="h-4 w-4" /> : <ArrowRightLeft className="h-4 w-4" />}{status.localRole === 'primary' ? 'Back Up & Publish Baseline' : 'Back Up & Copy Main PC'}</button>
       </>}
 
       {status.localRole === 'follower' && status.policy.phase !== 'baseline-ready' && <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-300">Open Hermes Hub on {status.policy.primaryDeviceName}, publish the baseline there, wait for Syncthing to finish, then refresh this panel.</div>}

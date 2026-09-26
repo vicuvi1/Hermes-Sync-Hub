@@ -1,0 +1,41 @@
+name: Pull Request CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 12.6.0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm test
+      - name: Reject committed private artifacts
+        shell: pwsh
+        run: |
+          $tracked = git ls-files
+          $bad = $tracked | Where-Object { $_ -match '(\.db(-wal|-shm)?$|\.env$|secrets\.vault|diagnostics.*\.json$|device-identity\.json$)' }
+          if ($bad) { $bad; throw 'Private runtime artifacts must not be committed.' }
+      - name: Package Windows smoke artifact
+        run: pnpm --filter @hermes-hub/desktop exec electron-builder --win dir --x64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4

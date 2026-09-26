@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import {
   HermesSession,
   HermesSessionDetail,
-  HermesMessage,
   SessionExportFormat,
   SessionExportResult,
   SessionImportResult,
 } from '@hermes-hub/types';
-import { formatTimeAgo, redactSecrets } from '@hermes-hub/shared';
+import { formatTimeAgo } from '@hermes-hub/shared';
 import {
   MessageSquare,
   Search,
@@ -38,9 +37,10 @@ import {
 interface SessionsViewProps {
   sessions: HermesSession[];
   onRefresh?: () => void;
+  initialSelectedSessionId?: string;
 }
 
-export const SessionsView: React.FC<SessionsViewProps> = ({ sessions: initialSessions, onRefresh }) => {
+export const SessionsView: React.FC<SessionsViewProps> = ({ sessions: initialSessions, onRefresh, initialSelectedSessionId }) => {
   const [sessions, setSessions] = useState<HermesSession[]>(initialSessions);
   const [search, setSearch] = useState('');
   const [selectedSession, setSelectedSession] = useState<HermesSession | null>(
@@ -68,10 +68,12 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ sessions: initialSes
   // Sync state when parent sessions prop changes
   useEffect(() => {
     setSessions(initialSessions);
-    if (!selectedSession && initialSessions.length > 0) {
+    const requested = initialSelectedSessionId && initialSessions.find((session) => session.id === initialSelectedSessionId);
+    if (requested) setSelectedSession(requested);
+    else if (!selectedSession && initialSessions.length > 0) {
       setSelectedSession(initialSessions[0]);
     }
-  }, [initialSessions]);
+  }, [initialSessions, initialSelectedSessionId]);
 
   // Load detailed session messages whenever selectedSession changes
   useEffect(() => {
@@ -96,30 +98,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ sessions: initialSes
         console.warn('Could not fetch session detail over IPC:', err);
       }
 
-      // Fallback: construct synthetic detail from HermesSession summary
       if (!isCancelled) {
-        const syntheticMessages: HermesMessage[] = [];
-        if (selectedSession.previewText) {
-          syntheticMessages.push({
-            id: 1,
-            sessionId: selectedSession.id,
-            role: 'user',
-            content: selectedSession.previewText,
-            timestamp: selectedSession.createdAt,
-          });
-          syntheticMessages.push({
-            id: 2,
-            sessionId: selectedSession.id,
-            role: 'assistant',
-            content: `Loaded session transcript summary for ${selectedSession.id} on model ${selectedSession.model}.`,
-            timestamp: selectedSession.updatedAt,
-          });
-        }
-
-        setSessionDetail({
-          ...selectedSession,
-          messages: syntheticMessages,
-        });
+        setSessionDetail(null);
         setIsLoadingDetail(false);
       }
     }
@@ -170,24 +150,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ sessions: initialSes
           redactSecrets: redact,
         });
         setExportResult(res);
-      } else {
-        // Fallback simulator
-        let simulated = '';
-        if (format === 'markdown') {
-          simulated = `# Hermes Session: ${selectedSession.title}\n\n- ID: \`${selectedSession.id}\`\n- Model: \`${selectedSession.model}\`\n\n### User\n${selectedSession.previewText || 'Hello'}`;
-        } else if (format === 'html') {
-          simulated = `<!DOCTYPE html><html><body><h1>${selectedSession.title}</h1><p>${selectedSession.previewText || ''}</p></body></html>`;
-        } else {
-          simulated = JSON.stringify(sessionDetail || selectedSession, null, 2);
-        }
-        if (redact) simulated = redactSecrets(simulated);
-        setExportResult({
-          success: true,
-          exportedCount: 1,
-          format,
-          content: simulated,
-        });
-      }
+      } else setExportResult({ success: false, exportedCount: 0, format, error: 'Export is unavailable because the secure desktop bridge is not connected.' });
     } catch (err: any) {
       setExportResult({
         success: false,
@@ -248,34 +211,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ sessions: initialSes
         if (res.success && res.importedCount > 0) {
           await handleRefresh();
         }
-      } else {
-        // Fallback simulation
-        const parsed = JSON.parse(importContent.trim());
-        const id = parsed.id || `imported-${Date.now()}`;
-        const newSession: HermesSession = {
-          id,
-          title: parsed.title || `Imported Session ${id}`,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          messagesCount: Array.isArray(parsed.messages) ? parsed.messages.length : 2,
-          model: parsed.model || 'deepseek/deepseek-v4-flash',
-          originDevice: 'local',
-          originDeviceName: 'Imported Turn',
-          revision: 1,
-          syncStatus: 'synced',
-          previewText: parsed.previewText || (parsed.messages && parsed.messages[0]?.content),
-        };
-        setSessions([newSession, ...sessions]);
-        setSelectedSession(newSession);
-        setImportResult({
-          success: true,
-          importedCount: 1,
-          skippedCount: 0,
-          importedIds: [id],
-          skippedIds: [],
-          errors: [],
-        });
-      }
+      } else setImportError('Import is unavailable because the secure desktop bridge is not connected.');
     } catch (err: any) {
       setImportError(err.message || 'Import failed due to invalid JSON syntax');
     } finally {
