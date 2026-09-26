@@ -23,5 +23,12 @@ contextBridge.exposeInMainWorld('hermesHub', {
   getActivePairingInvitation: () => ipcRenderer.invoke(IPC_CHANNELS.GET_ACTIVE_PAIRING_INVITATION),
   validatePairingCode: (codeOrPayload: string) => ipcRenderer.invoke(IPC_CHANNELS.VALIDATE_PAIRING_CODE, codeOrPayload),
   executePairing: (payload: any) => ipcRenderer.invoke(IPC_CHANNELS.EXECUTE_PAIRING, payload),
+  getWorkspaceStatus: () => ipcRenderer.invoke(IPC_CHANNELS.GET_WORKSPACE_STATUS),
+  initWorkspace: () => ipcRenderer.invoke(IPC_CHANNELS.INIT_WORKSPACE),
+  getManifest: () => ipcRenderer.invoke(IPC_CHANNELS.GET_MANIFEST),
+  generateManifest: () => ipcRenderer.invoke(IPC_CHANNELS.GENERATE_MANIFEST),
+  verifyManifest: () => ipcRenderer.invoke(IPC_CHANNELS.VERIFY_MANIFEST),
+  getSnapshots: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SNAPSHOTS),
+  createSafeSnapshot: (options?: any) => ipcRenderer.invoke(IPC_CHANNELS.CREATE_SAFE_SNAPSHOT, options),
 });
 

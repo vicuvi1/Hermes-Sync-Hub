@@ -13,6 +13,7 @@ import {
   TailscaleAdapter,
   SyncthingAdapter,
   PairingService,
+  WorkspaceService,
 } from '@hermes-hub/agent';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -32,6 +33,7 @@ const pairingService = new PairingService(
   syncthingAdapter,
   hermesService
 );
+const workspaceService = new WorkspaceService(deviceIdentity, hermesService);
 const agentServer = new AgentServer(
   deviceIdentity,
   healthMonitor,
@@ -39,7 +41,8 @@ const agentServer = new AgentServer(
   tailscaleAdapter,
   syncthingAdapter,
   deviceRegistry,
-  pairingService
+  pairingService,
+  workspaceService
 );
 
 function createWindow() {
@@ -182,6 +185,35 @@ ipcMain.handle(IPC_CHANNELS.VALIDATE_PAIRING_CODE, async (_event, codeOrPayload:
 
 ipcMain.handle(IPC_CHANNELS.EXECUTE_PAIRING, async (_event, payload: any) => {
   return pairingService.executePairing(payload);
+});
+
+// Milestone 8 Managed Workspace, Manifests & Snapshots
+ipcMain.handle(IPC_CHANNELS.GET_WORKSPACE_STATUS, async () => {
+  return workspaceService.getWorkspaceStatus();
+});
+
+ipcMain.handle(IPC_CHANNELS.INIT_WORKSPACE, async () => {
+  return workspaceService.initWorkspace();
+});
+
+ipcMain.handle(IPC_CHANNELS.GET_MANIFEST, async () => {
+  return workspaceService.getManifest();
+});
+
+ipcMain.handle(IPC_CHANNELS.GENERATE_MANIFEST, async () => {
+  return workspaceService.generateManifest();
+});
+
+ipcMain.handle(IPC_CHANNELS.VERIFY_MANIFEST, async () => {
+  return workspaceService.verifyManifest();
+});
+
+ipcMain.handle(IPC_CHANNELS.GET_SNAPSHOTS, async () => {
+  return workspaceService.getSnapshots();
+});
+
+ipcMain.handle(IPC_CHANNELS.CREATE_SAFE_SNAPSHOT, async (_event, options: any) => {
+  return workspaceService.createSafeSnapshot(options);
 });
 
 ipcMain.handle(IPC_CHANNELS.GET_OVERALL_STATS, async () => {

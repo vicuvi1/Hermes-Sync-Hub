@@ -6,6 +6,7 @@ import { HermesService } from '../hermes/HermesAdapter.js';
 import { TailscaleAdapter, ITailscaleAdapter } from '../tailscale/TailscaleAdapter.js';
 import { SyncthingAdapter, ISyncthingAdapter } from '../sync/SyncthingAdapter.js';
 import { PairingService } from '../pairing/PairingService.js';
+import { WorkspaceService } from '../workspace/WorkspaceService.js';
 
 export const DEFAULT_AGENT_PORT = 48199;
 
@@ -19,6 +20,7 @@ export class AgentServer {
   private tailscaleAdapter: ITailscaleAdapter;
   private syncthingAdapter: ISyncthingAdapter;
   private pairingService: PairingService;
+  private workspaceService: WorkspaceService;
 
   constructor(
     identityService?: DeviceIdentityService,
@@ -27,7 +29,8 @@ export class AgentServer {
     tailscaleAdapter?: ITailscaleAdapter,
     syncthingAdapter?: ISyncthingAdapter,
     deviceRegistry?: DeviceRegistryService,
-    pairingService?: PairingService
+    pairingService?: PairingService,
+    workspaceService?: WorkspaceService
   ) {
     this.identityService = identityService || new DeviceIdentityService();
     this.deviceRegistry = deviceRegistry || new DeviceRegistryService(this.identityService);
@@ -44,6 +47,9 @@ export class AgentServer {
         this.syncthingAdapter,
         this.hermesService
       );
+    this.workspaceService =
+      workspaceService ||
+      new WorkspaceService(this.identityService, this.hermesService);
   }
 
   /**
@@ -177,6 +183,65 @@ export class AgentServer {
                 const result = await this.pairingService.executePairing(parsed);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(result));
+              } catch (err: any) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+              }
+            });
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/workspace/status') {
+            const status = await this.workspaceService.getWorkspaceStatus();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(status));
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/workspace/init') {
+            const status = await this.workspaceService.initWorkspace();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(status));
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/workspace/manifest') {
+            const manifest = await this.workspaceService.getManifest();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(manifest));
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/workspace/manifest/generate') {
+            const manifest = await this.workspaceService.generateManifest();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(manifest));
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/workspace/manifest/verify') {
+            const verification = await this.workspaceService.verifyManifest();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(verification));
+            return;
+          }
+
+          if (req.method === 'GET' && url === '/workspace/snapshots') {
+            const snapshots = await this.workspaceService.getSnapshots();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(snapshots));
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/workspace/snapshots') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const snapshot = await this.workspaceService.createSafeSnapshot(parsed);
+                res.writeHead(201, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(snapshot));
               } catch (err: any) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: err.message }));

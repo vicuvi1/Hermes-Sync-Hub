@@ -51,6 +51,13 @@ declare global {
       getActivePairingInvitation: () => Promise<any>;
       validatePairingCode: (codeOrPayload: string) => Promise<any>;
       executePairing: (payload: any) => Promise<any>;
+      getWorkspaceStatus: () => Promise<any>;
+      initWorkspace: () => Promise<any>;
+      getManifest: () => Promise<any>;
+      generateManifest: () => Promise<any>;
+      verifyManifest: () => Promise<any>;
+      getSnapshots: () => Promise<any>;
+      createSafeSnapshot: (options?: any) => Promise<any>;
     };
   }
 }

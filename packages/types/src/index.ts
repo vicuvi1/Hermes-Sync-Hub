@@ -400,3 +400,81 @@ export interface PairingExecutionResult {
   error?: string;
 }
 
+// Milestone 8 Workspace, Manifest & Snapshot Types
+export interface WorkspaceStatus {
+  rootPath: string;
+  isInitialized: boolean;
+  layout: {
+    manifests: string;
+    snapshots: string;
+    devices: string;
+    memories: string;
+    skills: string;
+    configs: string;
+    backups: string;
+    activity: string;
+  };
+  totalFiles: number;
+  totalSizeBytes: number;
+  activeManifestRevision: number;
+  lastSnapshotAt?: string;
+  categoriesBreakdown?: Record<string, number>;
+}
+
+export type WorkspaceFileCategory = 'skill' | 'memory' | 'session' | 'config' | 'snapshot' | 'other';
+
+export interface ManifestFileEntry {
+  id: string;
+  relativePath: string;
+  sha256: string;
+  sizeBytes: number;
+  modifiedAt: string;
+  category: WorkspaceFileCategory;
+  originDevice: string;
+  revision: number;
+}
+
+export interface ClusterManifest {
+  manifestId: string;
+  deviceId: string;
+  revision: number;
+  generatedAt: string;
+  files: ManifestFileEntry[];
+  stats: {
+    totalFiles: number;
+    totalSizeBytes: number;
+    categoriesCount: Record<string, number>;
+  };
+}
+
+export interface ManifestVerificationResult {
+  valid: boolean;
+  verifiedAt: string;
+  totalChecked: number;
+  matchingCount: number;
+  tamperedFiles: Array<{
+    relativePath: string;
+    expectedSha256: string;
+    actualSha256: string;
+  }>;
+  missingFiles: string[];
+}
+
+export interface SafeSnapshotRecord {
+  id: string;
+  name: string;
+  createdAt: string;
+  originDevice: string;
+  sourceDatabases: string[];
+  sizeBytes: number;
+  sha256: string;
+  recordCounts: {
+    sessions: number;
+    memories: number;
+    skills: number;
+    projects: number;
+  };
+  isClean: boolean;
+  filePath: string;
+}
+

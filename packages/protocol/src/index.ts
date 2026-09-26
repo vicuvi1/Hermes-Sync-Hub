@@ -47,6 +47,15 @@ export const IPC_CHANNELS = {
   GET_ACTIVE_PAIRING_INVITATION: 'hermes-hub:get-active-pairing-invitation',
   VALIDATE_PAIRING_CODE: 'hermes-hub:validate-pairing-code',
   EXECUTE_PAIRING: 'hermes-hub:execute-pairing',
+
+  // Milestone 8 Managed Workspace, Manifests & Snapshots channels
+  GET_WORKSPACE_STATUS: 'hermes-hub:get-workspace-status',
+  INIT_WORKSPACE: 'hermes-hub:init-workspace',
+  GET_MANIFEST: 'hermes-hub:get-manifest',
+  GENERATE_MANIFEST: 'hermes-hub:generate-manifest',
+  VERIFY_MANIFEST: 'hermes-hub:verify-manifest',
+  GET_SNAPSHOTS: 'hermes-hub:get-snapshots',
+  CREATE_SAFE_SNAPSHOT: 'hermes-hub:create-safe-snapshot',
 } as const;
 
 export interface PairingCodePayload {

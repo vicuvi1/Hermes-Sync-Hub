@@ -12,6 +12,10 @@ import {
   PairingValidationResult,
   PairingJoinPayload,
   PairingExecutionResult,
+  WorkspaceStatus,
+  ClusterManifest,
+  ManifestVerificationResult,
+  SafeSnapshotRecord,
 } from '@hermes-hub/types';
 import { DEFAULT_AGENT_PORT } from '../health/AgentServer.js';
 
@@ -228,6 +232,66 @@ export class AgentClient {
     });
     if (!res.ok) {
       throw new Error(`Pairing execution failed: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getWorkspaceStatus(): Promise<WorkspaceStatus> {
+    const res = await this.fetchWithTimeout('/workspace/status');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch workspace status: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async initWorkspace(): Promise<WorkspaceStatus> {
+    const res = await this.fetchWithTimeout('/workspace/init', { method: 'POST' });
+    if (!res.ok) {
+      throw new Error(`Failed to initialize workspace: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getManifest(): Promise<ClusterManifest> {
+    const res = await this.fetchWithTimeout('/workspace/manifest');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch manifest: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async generateManifest(): Promise<ClusterManifest> {
+    const res = await this.fetchWithTimeout('/workspace/manifest/generate', { method: 'POST' });
+    if (!res.ok) {
+      throw new Error(`Failed to generate manifest: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async verifyManifest(): Promise<ManifestVerificationResult> {
+    const res = await this.fetchWithTimeout('/workspace/manifest/verify', { method: 'POST' });
+    if (!res.ok) {
+      throw new Error(`Failed to verify manifest: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getSnapshots(): Promise<SafeSnapshotRecord[]> {
+    const res = await this.fetchWithTimeout('/workspace/snapshots');
+    if (!res.ok) {
+      throw new Error(`Failed to fetch snapshots: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async createSafeSnapshot(options?: { name?: string; notes?: string }): Promise<SafeSnapshotRecord> {
+    const res = await this.fetchWithTimeout('/workspace/snapshots', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options || {}),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to create safe snapshot: ${res.status}`);
     }
     return res.json();
   }
