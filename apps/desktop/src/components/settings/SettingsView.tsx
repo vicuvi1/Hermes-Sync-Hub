@@ -10,6 +10,7 @@ import {
 } from '@hermes-hub/types';
 import { formatBytes } from '@hermes-hub/shared';
 import { UpdateSettingsSection } from './UpdateSettingsSection';
+import { RepositorySyncSection } from './RepositorySyncSection';
 import {
   Settings,
   Wifi,
@@ -1025,6 +1026,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* GitHub updater */}
       <UpdateSettingsSection />
+
+      {/* Source repository developer workflow */}
+      <RepositorySyncSection />
 
       {/* Diagnostics & Logs */}
       <div className="space-y-3">

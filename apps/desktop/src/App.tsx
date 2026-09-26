@@ -43,6 +43,9 @@ import {
   OnboardingState,
   OverallStats,
   RuntimeHealth,
+  SourceRepositoryPushInput,
+  SourceRepositoryResult,
+  SourceRepositoryStatus,
   SyncthingState,
   TailscaleState,
   VaultSecret,
@@ -62,6 +65,10 @@ declare global {
       triggerSync: () => Promise<{ success: boolean }>;
       openFolder: (path: string) => Promise<boolean>;
       getReadme: () => Promise<string>;
+      getSourceRepositoryStatus: (workspacePath?: string) => Promise<SourceRepositoryStatus>;
+      pickSourceRepository: () => Promise<string | null>;
+      pullSourceRepository: (workspacePath: string) => Promise<SourceRepositoryResult>;
+      pushSourceRepository: (input: SourceRepositoryPushInput) => Promise<SourceRepositoryResult>;
       exportDiagnostics: (outputPath?: string) => Promise<{ success: boolean; filePath?: string; report?: any }>;
       getHermesStatus: () => Promise<any>;
       getTailscaleState: () => Promise<TailscaleState>;

@@ -21,6 +21,10 @@ export const IPC_CHANNELS = {
   OPEN_EXTERNAL_URL: 'hermes-hub:open-external-url',
   OPEN_FOLDER: 'hermes-hub:open-folder',
   GET_README: 'hermes-hub:get-readme',
+  GET_SOURCE_REPOSITORY_STATUS: 'hermes-hub:get-source-repository-status',
+  PICK_SOURCE_REPOSITORY: 'hermes-hub:pick-source-repository',
+  PULL_SOURCE_REPOSITORY: 'hermes-hub:pull-source-repository',
+  PUSH_SOURCE_REPOSITORY: 'hermes-hub:push-source-repository',
 
   // Milestone 2 Local Agent channels
   GET_LOCAL_DEVICE: 'hermes-hub:get-local-device',

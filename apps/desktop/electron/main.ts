@@ -1,10 +1,10 @@
-import { app, BrowserWindow, ipcMain, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell, type OpenDialogOptions } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
-import { CompleteOnboardingInput, Device, OverallStats, RuntimeHealth, VaultSecret } from '@hermes-hub/types';
+import { CompleteOnboardingInput, Device, OverallStats, RuntimeHealth, SourceRepositoryPushInput, VaultSecret } from '@hermes-hub/types';
 import { redactSecrets } from '@hermes-hub/shared';
 import {
   DeviceIdentityService,
@@ -27,6 +27,7 @@ import { SettingsManager } from './settings.js';
 import { setupTray, destroyTray } from './tray.js';
 import { sendDesktopNotification } from './notifications.js';
 import { UpdateManager } from './updater.js';
+import { SourceRepositoryService } from './sourceRepository.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -83,6 +84,7 @@ const agentServer = new AgentServer(
 );
 let updateManager: UpdateManager | null = null;
 let vaultService: VaultService | null = null;
+const sourceRepositoryService = new SourceRepositoryService();
 
 function appendCrashLog(kind: string, error: unknown): void {
   try {
@@ -534,6 +536,31 @@ ipcMain.handle(IPC_CHANNELS.GET_README, async () => {
     ? path.join(process.resourcesPath, 'README.md')
     : path.resolve(__dirname, '../../..', 'README.md');
   return fs.readFileSync(readmePath, 'utf8');
+});
+
+ipcMain.handle(IPC_CHANNELS.GET_SOURCE_REPOSITORY_STATUS, async (_event, workspacePath?: string) => {
+  return sourceRepositoryService.getStatus(workspacePath || settingsManager.getSettings().repositoryWorkspacePath);
+});
+
+ipcMain.handle(IPC_CHANNELS.PICK_SOURCE_REPOSITORY, async () => {
+  const options: OpenDialogOptions = {
+    title: 'Choose the Hermes Hub source folder',
+    properties: ['openDirectory'],
+  };
+  const result = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, options)
+    : await dialog.showOpenDialog(options);
+  return result.canceled ? null : result.filePaths[0];
+});
+
+ipcMain.handle(IPC_CHANNELS.PULL_SOURCE_REPOSITORY, async (_event, workspacePath: string) => {
+  settingsManager.updateSettings({ repositoryWorkspacePath: workspacePath });
+  return sourceRepositoryService.pull(workspacePath);
+});
+
+ipcMain.handle(IPC_CHANNELS.PUSH_SOURCE_REPOSITORY, async (_event, input: SourceRepositoryPushInput) => {
+  settingsManager.updateSettings({ repositoryWorkspacePath: input.workspacePath });
+  return sourceRepositoryService.push(input);
 });
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();

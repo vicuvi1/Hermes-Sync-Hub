@@ -668,6 +668,33 @@ export interface AppSettings {
   autoInstallUpdates: boolean;
   hermesHome?: string;
   workspacePath?: string;
+  repositoryWorkspacePath?: string;
+}
+
+export interface SourceRepositoryStatus {
+  repositoryUrl: string;
+  workspacePath: string;
+  configured: boolean;
+  gitAvailable: boolean;
+  validRepository: boolean;
+  branch?: string;
+  commit?: string;
+  changedFiles: string[];
+  ahead: number;
+  behind: number;
+  message: string;
+}
+
+export interface SourceRepositoryPushInput {
+  workspacePath: string;
+  commitMessage: string;
+  confirmed: boolean;
+}
+
+export interface SourceRepositoryResult {
+  success: boolean;
+  message: string;
+  status: SourceRepositoryStatus;
 }
 
 export type RuntimeServiceState = 'healthy' | 'unavailable' | 'misconfigured' | 'offline' | 'error';

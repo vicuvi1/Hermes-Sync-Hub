@@ -199,6 +199,33 @@ Enable **Automatically download, install, and restart when an update is availabl
 
 The UI reports idle, checking, current, available, downloading, installing, restart pending, offline, failed, or disabled-in-development states. Only packaged builds update themselves.
 
+## Source repository sync
+
+The **Settings → Source Repository Sync** panel is a separate developer workflow for publishing files changed by coding assistants such as GPT or Reverso and for downloading the latest source code.
+
+The destination is intentionally fixed to [`https://github.com/vicuvi1/Hermes-Sync-Hub.git`](https://github.com/vicuvi1/Hermes-Sync-Hub). The app refuses to operate on a folder whose `origin` points somewhere else.
+
+### Configure the local folder
+
+1. Open **Settings → Source Repository Sync**.
+2. Select **Browse** and choose the local `Hermes-Sync-Hub` folder containing `.git`.
+3. Select **Check**. The panel displays the branch, short commit, ahead/behind counts, and every changed file.
+
+Git must be installed and authenticated for GitHub on the computer. This requirement applies only to source repository sync; normal application updates do not require Git, Node.js, pnpm, or source code.
+
+### Pull the latest source
+
+Select **Pull Latest**. For safety, the app allows only a fast-forward update on `main` and refuses to pull while uncommitted local edits exist. Commit or otherwise handle those edits first so a pull cannot silently overwrite them.
+
+### Commit and push changes
+
+1. Review the complete changed-files list.
+2. Enter a clear commit message.
+3. Select the confirmation checkbox.
+4. Select **Commit & Push**.
+
+The app stages the displayed working-tree changes, creates a commit when needed, and pushes `HEAD` to `origin/main`. It blocks likely environment files, credentials, tokens, private keys, Vault content, and local database files. GitHub may still reject a push if authentication is missing, branch protection applies, or the remote contains commits that have not been pulled.
+
 ## Data, privacy, and security
 
 ### Typical Windows locations
@@ -371,8 +398,8 @@ Artifacts in `release/` include the installer, `latest.yml`, optional blockmap, 
 3. Create and push the matching annotated tag.
 
 ```powershell
-git tag -a v0.2.4 -m "Hermes Hub v0.2.4"
-git push origin v0.2.4
+git tag -a v0.2.5 -m "Hermes Hub v0.2.5"
+git push origin v0.2.5
 ```
 
 The desktop version and tag must match. Releases are currently unsigned. Never commit signing certificates, keys, or passwords.
