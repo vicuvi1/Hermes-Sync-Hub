@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowRightLeft, CheckCircle2, Crown, DatabaseBackup, LoaderCircle, ShieldCheck } from 'lucide-react';
-import { Device, MeshSyncActionResult, MeshSyncStatus, RuntimeHealth, SyncthingState } from '@hermes-hub/types';
+import { Device, MeshSyncActionResult, MeshSyncStatus, RuntimeHealth, SharedVaultStatus, SyncthingState } from '@hermes-hub/types';
 
 interface MeshPrimaryPanelProps {
   devices: Device[];
@@ -16,6 +16,7 @@ export const MeshPrimaryPanel: React.FC<MeshPrimaryPanelProps> = ({ devices }) =
   const [runtime, setRuntime] = useState<RuntimeHealth | null>(null);
   const [syncthing, setSyncthing] = useState<SyncthingState | null>(null);
   const [conflictCount, setConflictCount] = useState(0);
+  const [vault, setVault] = useState<SharedVaultStatus | null>(null);
 
   const refresh = async () => {
     if (!window.hermesHub?.getMeshSyncStatus) return;
@@ -24,10 +25,10 @@ export const MeshPrimaryPanel: React.FC<MeshPrimaryPanelProps> = ({ devices }) =
       const next = await window.hermesHub.getMeshSyncStatus();
       setStatus(next);
       setSelectedId(next.policy?.primaryDeviceId || next.localDeviceId);
-      const [onboarding, syncState, conflicts] = await Promise.all([
-        window.hermesHub.getOnboardingState(), window.hermesHub.getSyncthingState(), window.hermesHub.getSyncConflicts(),
+      const [onboarding, syncState, conflicts, vaultStatus] = await Promise.all([
+        window.hermesHub.getOnboardingState(), window.hermesHub.getSyncthingState(), window.hermesHub.getSyncConflicts(), window.hermesHub.getVaultStatus(),
       ]);
-      setRuntime(onboarding.runtime); setSyncthing(syncState); setConflictCount(conflicts.length);
+      setRuntime(onboarding.runtime); setSyncthing(syncState); setConflictCount(conflicts.length); setVault(vaultStatus);
     } catch (error) {
       setNotice({ success: false, message: error instanceof Error ? error.message : 'Could not load mesh policy.' });
     } finally {
@@ -87,6 +88,7 @@ export const MeshPrimaryPanel: React.FC<MeshPrimaryPanelProps> = ({ devices }) =
     { label: 'Syncthing', ok: Boolean(syncthing?.running), detail: syncthing?.running ? 'Running' : 'Install, start, and authenticate Syncthing' },
     { label: 'HermesHubData folder', ok: sharedFolder?.type === 'sendreceive' && !sharedFolder.paused && sharedFolder.needFiles === 0 && sharedFolder.state === 'idle', detail: sharedFolder ? `${sharedFolder.path} · ${sharedFolder.type} · ${sharedFolder.needFiles} pending` : 'Create/share the intended HermesHubData folder' },
     { label: 'Conflicts', ok: conflictCount === 0, detail: conflictCount ? `${conflictCount} conflict(s) must be resolved first` : 'No unresolved conflicts' },
+    { label: 'Shared Vault', ok: !vault?.configured || vault.conflictFiles.length === 0, detail: vault?.configured ? `${vault.secretCount} secrets · revision ${vault.revision}${vault.locked ? ' · locked' : ''}` : 'Optional · configure it from Vault' },
     { label: 'Backup readiness', ok: Boolean(status), detail: 'A recovery artifact is created before the operation' },
   ];
   const preflightReady = preflight.every((item) => item.ok);
@@ -127,7 +129,7 @@ export const MeshPrimaryPanel: React.FC<MeshPrimaryPanelProps> = ({ devices }) =
       <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">2 · {status.localRole === 'primary' ? 'Publish this PC' : 'Copy to this PC'}</div>
       <div className="mt-3 grid gap-3 md:grid-cols-3">
         <div className="rounded-lg bg-background p-3 text-xs text-muted-foreground"><DatabaseBackup className="mb-2 h-4 w-4 text-indigo-500" /><strong className="block text-foreground">Automatic backup</strong>A recovery bundle is created before the baseline is published or copied.</div>
-        <div className="rounded-lg bg-background p-3 text-xs text-muted-foreground"><ShieldCheck className="mb-2 h-4 w-4 text-emerald-500" /><strong className="block text-foreground">Safe files only</strong>Skills and memories are copied. Live databases, secrets, and Vault data stay local.</div>
+        <div className="rounded-lg bg-background p-3 text-xs text-muted-foreground"><ShieldCheck className="mb-2 h-4 w-4 text-emerald-500" /><strong className="block text-foreground">Safe files + encrypted Vault</strong>Skills and memories use the baseline. Shared Vault ciphertext travels through the same Syncthing folder and unlocks with one password.</div>
         <div className="rounded-lg bg-background p-3 text-xs text-muted-foreground"><ArrowRightLeft className="mb-2 h-4 w-4 text-primary" /><strong className="block text-foreground">Then two-way</strong>After adoption, newer safe changes are shared back to every PC, including Main.</div>
       </div>
 

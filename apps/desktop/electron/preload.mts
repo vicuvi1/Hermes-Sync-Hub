@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
-import type { SavedSearch, SearchIndexStatus, SearchQuery, SearchResult } from '@hermes-hub/types';
+import type { SavedSearch, SearchIndexStatus, SearchQuery, SearchResult, VaultEnvironmentProfile, VaultSetupInput, VaultUnlockInput } from '@hermes-hub/types';
 
 // Expose safe, typed API to Renderer process
 contextBridge.exposeInMainWorld('hermesHub', {
@@ -82,9 +82,20 @@ contextBridge.exposeInMainWorld('hermesHub', {
     ipcRenderer.invoke(IPC_CHANNELS.SHOW_NOTIFICATION, title, body),
   getDiagnosticsReport: () => ipcRenderer.invoke(IPC_CHANNELS.GET_DIAGNOSTICS_REPORT),
   getVaultSecrets: () => ipcRenderer.invoke(IPC_CHANNELS.GET_VAULT_SECRETS),
+  getVaultStatus: () => ipcRenderer.invoke(IPC_CHANNELS.GET_VAULT_STATUS),
+  setupSharedVault: (input: VaultSetupInput) => ipcRenderer.invoke(IPC_CHANNELS.SETUP_SHARED_VAULT, input),
+  unlockSharedVault: (input: VaultUnlockInput) => ipcRenderer.invoke(IPC_CHANNELS.UNLOCK_SHARED_VAULT, input),
+  lockSharedVault: () => ipcRenderer.invoke(IPC_CHANNELS.LOCK_SHARED_VAULT),
+  changeVaultPassword: (currentPassword: string, newPassword: string, rememberOnThisPc: boolean) => ipcRenderer.invoke(IPC_CHANNELS.CHANGE_VAULT_PASSWORD, currentPassword, newPassword, rememberOnThisPc),
   getVaultSecret: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.GET_VAULT_SECRET, id),
   saveVaultSecret: (secret: any) => ipcRenderer.invoke(IPC_CHANNELS.SAVE_VAULT_SECRET, secret),
   deleteVaultSecret: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.DELETE_VAULT_SECRET, id),
+  getVaultEnvironments: () => ipcRenderer.invoke(IPC_CHANNELS.GET_VAULT_ENVIRONMENTS),
+  getVaultEnvironment: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.GET_VAULT_ENVIRONMENT, id),
+  saveVaultEnvironment: (profile: VaultEnvironmentProfile) => ipcRenderer.invoke(IPC_CHANNELS.SAVE_VAULT_ENVIRONMENT, profile),
+  deleteVaultEnvironment: (id: string) => ipcRenderer.invoke(IPC_CHANNELS.DELETE_VAULT_ENVIRONMENT, id),
+  createMigrationBundle: () => ipcRenderer.invoke(IPC_CHANNELS.CREATE_MIGRATION_BUNDLE),
+  importMigrationBundle: (confirmed: boolean) => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_MIGRATION_BUNDLE, confirmed),
   getRuntimeHealth: () => ipcRenderer.invoke(IPC_CHANNELS.GET_RUNTIME_HEALTH),
   getOnboardingState: () => ipcRenderer.invoke(IPC_CHANNELS.GET_ONBOARDING_STATE),
   completeOnboarding: (input: any) => ipcRenderer.invoke(IPC_CHANNELS.COMPLETE_ONBOARDING, input),

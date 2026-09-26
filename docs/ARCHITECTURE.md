@@ -48,7 +48,7 @@ Hermes Hub operates completely peer-to-peer (P2P) and local-first. There is no c
 | **Local Metadata** | Atomic JSON files | Known devices, file revisions, activity, settings, search index, and backup metadata (never replaces Hermes's internal DB) |
 | **Transport** | Syncthing REST API + Native Syncthing Core | P2P block-level file synchronization, conflict detection, NAT traversal |
 | **Mesh Network** | Tailscale (CLI / Local API) | Zero-config WireGuard VPN mesh, device reachability, authenticated IP addressing |
-| **Security Vault** | Electron `safeStorage` on Windows + AES-256-GCM | Encrypted-at-rest credential storage, selective reveal/copy |
+| **Shared Vault** | `scrypt` + AES-256-GCM; optional Electron `safeStorage` remembered key | Password-portable encrypted credential and environment storage, selective reveal/copy |
 
 ---
 
@@ -106,7 +106,7 @@ HermesHub Core
   ├── HermesAdapter (Detection, version, sessions, memories, skills, config)
   ├── TailscaleAdapter (IP discovery, peer reachability, ping, auth status)
   ├── SyncthingAdapter (REST API client, folder status, peer connection, transfer rates)
-  ├── VaultService (OS-level master key storage, AES-GCM encryption/decryption)
+  ├── SharedVaultService (password-derived key, AES-GCM encryption, secret and environment profiles)
   ├── BackupService (Local snapshot bundling, rotation, restore verification)
   ├── DeviceService (Persistent device identity, hardware specs, manifest creation)
   └── SyncService (Manifest comparison, conflict detection, revision tracking)
@@ -127,8 +127,8 @@ In a peer-to-peer ecosystem with no central server:
 
 ## 6. Security Principles
 
-1. **Secrets Encrypted at Rest**: Vault values are encrypted locally with AES-256-GCM and are never placed in the shared workspace or search index.
-2. **Windows User Protection**: The random Vault master key is protected with Electron `safeStorage` for the current Windows user.
+1. **Secrets Encrypted at Rest**: Vault values are encrypted with AES-256-GCM. Only the authenticated ciphertext file is placed in the shared workspace; plaintext is excluded from search, manifests, logs, and diagnostics.
+2. **Portable Password, Local Convenience**: `scrypt` derives the shared encryption key from one password and a random salt. An optional remembered derived key is protected with Electron `safeStorage` for the current Windows user and never synchronized.
 3. **No Central Telemetry or Leakage**: All logs redact known key prefixes and sensitive tokens before writing to disk or exporting diagnostics.
 4. **Git Hygiene**: Strict `.gitignore` rules prevent any accidental tracking of workspace files, SQLite databases, or credentials.
 

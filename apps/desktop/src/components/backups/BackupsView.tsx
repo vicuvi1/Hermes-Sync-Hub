@@ -18,6 +18,8 @@ import {
   Check,
   ChevronRight,
   Sliders,
+  Laptop,
+  Upload,
 } from 'lucide-react';
 
 interface BackupsViewProps {
@@ -153,6 +155,20 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
     setAutoBackupsEnabled(enabled); setSchedule(frequency);
     await window.hermesHub?.updateAppSettings({ autoBackupEnabled: enabled, autoBackupFrequency: frequency });
   };
+  const createMigrationBundle = async () => {
+    try {
+      const result = await window.hermesHub?.createMigrationBundle();
+      setRestoreMessage(result?.message || 'Migration export did not return a result.');
+      if (result?.success && result.filePath) await window.hermesHub?.openFolder(result.filePath);
+    } catch (error) { setRestoreMessage(error instanceof Error ? error.message : 'Migration export failed.'); }
+  };
+  const importMigrationBundle = async () => {
+    if (!window.confirm('Import a migration bundle? Hermes Hub will create a rollback backup before copying its settings and safe workspace files.')) return;
+    try {
+      const result = await window.hermesHub?.importMigrationBundle(true);
+      setRestoreMessage(result?.message || 'Migration import did not return a result.');
+    } catch (error) { setRestoreMessage(error instanceof Error ? error.message : 'Migration import failed.'); }
+  };
 
   const latestBackup = backups[0];
 
@@ -237,6 +253,7 @@ export const BackupsView: React.FC<BackupsViewProps> = ({
 
       {activeTab === 'recovery' && <div className="space-y-3">
         <div className="rounded-xl border border-border bg-card/60 p-4"><h4 className="text-sm font-bold">Recovery Center</h4><p className="mt-1 text-xs text-muted-foreground">Browse baseline safety bundles, conflict copies, and quarantined workspace files. Only verified local recovery bundles can be restored automatically; other artifacts can be inspected from their folder.</p></div>
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-5"><div className="flex items-start gap-3"><Laptop className="mt-0.5 h-5 w-5 text-primary" /><div><h4 className="text-sm font-bold">Move Hermes Hub to another PC</h4><p className="mt-1 max-w-3xl text-xs text-muted-foreground">Create one portable folder containing preferences, memories, skills, safe configuration, and the encrypted Shared Vault. Importing creates a rollback backup first. The Vault still requires its shared password.</p></div></div><div className="mt-4 flex flex-wrap gap-2"><button onClick={() => void createMigrationBundle()} className="flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground"><Download className="h-4 w-4" />Create migration bundle</button><button onClick={() => void importMigrationBundle()} className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-muted"><Upload className="h-4 w-4" />Import migration bundle</button></div></div>
         {recoveryArtifacts.length === 0 ? <div className="rounded-xl border border-dashed border-border p-8 text-center text-xs text-muted-foreground">No recovery artifacts exist yet.</div> : recoveryArtifacts.map((artifact) => <div key={artifact.id} className="flex flex-col gap-3 rounded-xl border border-border bg-card/70 p-4 md:flex-row md:items-center md:justify-between"><div><div className="flex items-center gap-2"><span className="text-sm font-semibold">{artifact.name}</span><span className="rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase text-muted-foreground">{artifact.kind}</span></div><p className="mt-1 text-xs text-muted-foreground">{artifact.description}</p><div className="mt-2 font-mono text-[10px] text-muted-foreground">{artifact.filesCount} files · {formatTimeAgo(artifact.createdAt)} · {artifact.filePath}</div></div><div className="flex gap-2"><button onClick={() => window.hermesHub?.openFolder(artifact.filePath)} className="rounded-lg border border-border px-3 py-2 text-xs font-semibold hover:bg-muted">Inspect folder</button>{artifact.restorable && <button onClick={() => setRecoveryConfirmId(artifact.id)} className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Restore verified files</button>}</div></div>)}
       </div>}
 

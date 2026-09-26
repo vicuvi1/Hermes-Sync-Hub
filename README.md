@@ -49,7 +49,7 @@ Hermes Hub provides one place to:
 - Use Syncthing as optional file transport between devices.
 - Use Tailscale as the optional private network joining those devices.
 - Create, verify, retain, restore, and inspect backups.
-- Store credentials in an encrypted local vault protected by Windows secure storage.
+- Store credentials, private keys, certificates, recovery codes, and reusable `.env` profiles in a password-unlocked encrypted Shared Vault.
 - Export redacted diagnostics.
 - Install releases without Git, Node.js, pnpm, or source code.
 
@@ -59,7 +59,7 @@ Hermes Hub does **not** require a hosted Hermes Hub server. The desktop applicat
 
 ### Local first
 
-Your workspace, settings, backups, and vault remain local unless you explicitly configure synchronization. The app does not require a Hermes Hub cloud account.
+Your workspace, settings, backups, and vault remain under your control. When the selected workspace is transported by Syncthing, the Shared Vault travels only as authenticated ciphertext. The app does not require a Hermes Hub cloud account.
 
 ### Honest states
 
@@ -99,12 +99,27 @@ These screens display content discovered by live services. Supported operations 
 
 ### Vault
 
-Vault stores secrets in an AES-256-GCM encrypted file. A random master key is protected with Electron `safeStorage`, which uses Windows protection for the current user. Lists are redacted; plaintext is returned only for an explicit reveal.
+Shared Vault stores secrets and environment profiles in one AES-256-GCM encrypted file under the managed workspace. One password is transformed into the encryption key with `scrypt`; the password is never placed in the Vault file. Enter the same password on every PC that receives the encrypted file through Syncthing.
 
-- Never commit vault files or key material.
-- Avoid placing revealed values in screenshots or diagnostics.
-- Back up credentials separately if they are the only copy.
-- A vault copied to another Windows profile may not decrypt there.
+- **Remember on this PC** protects a derived unlock key with Windows secure storage. It does not synchronize the password.
+- Secret lists and environment lists are redacted. Plaintext is returned only for reveal, copy, or edit.
+- Reveal automatically hides again after one minute. Copy clears the clipboard after 30 seconds when it still contains the copied value.
+- Supported categories include API keys, authentication tokens, passwords, SSH keys, certificates, recovery codes, Tailscale, and custom values.
+- Environment profiles accept familiar `NAME=value` or `export NAME=value` lines and can be copied back as a complete `.env` document.
+- Password changes re-encrypt the full Vault. Allow Syncthing to finish before unlocking another PC with the new password.
+- Syncthing conflict copies are reported in the Vault UI. Preserve both encrypted copies until the desired version is identified.
+- Never commit Vault files or private values to GitHub. Source Repository Sync blocks common Vault, key, token, and environment-file patterns.
+
+#### First Shared Vault setup
+
+1. Confirm every PC points Syncthing at the same `HermesHubData` workspace.
+2. Open **Vault** on the first PC and choose a password containing at least eight characters.
+3. Leave **Import previous local Vault** enabled to migrate credentials saved by v0.3.
+4. Leave **Remember on this PC** enabled if Hermes Hub should unlock automatically for this Windows account.
+5. Wait for Syncthing to report idle.
+6. Open **Vault** on the next PC and enter the same password once.
+
+If a second PC shows the setup screen instead of the unlock screen, its workspace has not received `vault/shared-vault.enc` yet. Check the workspace path and Syncthing folder before creating another Vault.
 
 ### Activity and Backups
 
@@ -187,7 +202,11 @@ Create backups from **Backups**. Verify an archive before restoration. Restorati
 
 ### Store a secret
 
-Add it in **Vault**. Listings remain masked. Reveal or copy only when necessary and avoid leaving plaintext in the clipboard.
+Add it in **Vault → Secrets**. Listings remain masked. The app automatically hides revealed values and conditionally clears copied values from the clipboard.
+
+### Reuse an environment
+
+Open **Vault → Environments**, create a profile, and paste `.env` lines such as `OPENAI_API_KEY=...`. On another synchronized PC, unlock the Vault with the same password and copy the complete profile when needed.
 
 ### Quick actions
 
@@ -249,7 +268,7 @@ On each follower PC, open the same panel and select **Refresh status**. When the
 
 Before overwriting anything, Hermes Hub creates a local-only recovery bundle named like `local-recovery-...`. It contains the follower's current safe memory and skill files plus a SHA-256 manifest, and lives under the device metadata `recovery` directory (normally `%LOCALAPPDATA%\HermesHub\recovery` on Windows). It then replaces matching safe skill and memory files with the baseline files. Files that exist only on the follower are preserved rather than silently deleted. The resulting adoption record is stored locally for that device and baseline ID.
 
-Repeat this step separately on every follower. Never copy the Main PC application-data or Vault directory manually.
+Repeat this step separately on every follower. Do not copy the Main PC application-data directory manually. Shared Vault ciphertext is transported through the configured workspace or a Hermes Hub migration bundle, never by copying the Windows-protected remembered-key file.
 
 ### Step 4: normal two-way change sharing
 
@@ -272,8 +291,8 @@ This means a memory edited on a laptop can later flow to the Main PC. Main is au
 | Sanitized configuration representation | Published | One-way staging | Secrets are redacted; sanitized config is not written over a live local config. |
 | Safe session exports/snapshots | Preserved in workspace/backups | Transportable when explicitly exported | Live session databases are never copied. |
 | Live SQLite databases, WAL, SHM, journals, locks | No | No | Excluded to prevent corruption. |
-| Vault secrets and Windows-protected key material | No | No | Remain local to the Windows user/profile. |
-| API keys, tokens, passwords | No | No | Redacted or excluded. Configure credentials separately on every PC. |
+| Shared Vault ciphertext | Not part of baseline overwrite | Yes, through Syncthing | Password-derived AES-256-GCM file. Password and remembered Windows key never travel. |
+| API keys, tokens, passwords, private keys, `.env` profiles | Encrypted only | Encrypted only | Never included in manifests, search, diagnostics, activity descriptions, or Git operations. |
 | Application binaries | No | No | Use **Application Update** for Hermes Hub releases. |
 | Source code | No | No | Use **Source Repository Sync** for the GitHub project. |
 
@@ -357,7 +376,8 @@ The app stages the displayed working-tree changes, creates a commit when needed,
 | Settings and Electron data | `%APPDATA%\Hermes Hub` |
 | Device identity | `%LOCALAPPDATA%\HermesHub` |
 | Crash log | `%APPDATA%\Hermes Hub\logs\main-process.log` |
-| Vault and protected key blob | `%APPDATA%\Hermes Hub\vault` |
+| Shared Vault ciphertext | `<workspace>\vault\shared-vault.enc` |
+| Optional remembered unlock key | `%APPDATA%\Hermes Hub\vault\shared-vault-key.bin` |
 | Workspace | Selected during onboarding or the application default |
 
 Locations can vary with Windows configuration and custom paths.
@@ -371,9 +391,11 @@ Locations can vary with Windows configuration and custom paths.
 
 ### Secret handling
 
-- Authenticated AES-256-GCM vault encryption.
-- Windows-protected master key through Electron secure storage.
+- Authenticated AES-256-GCM Shared Vault encryption.
+- Password-to-key derivation with `scrypt` and a random per-Vault salt.
+- Optional Windows-protected remembered unlock key through Electron secure storage.
 - Masked listings and explicit reveal.
+- Automatic reveal hiding and conditional clipboard clearing.
 - Credential redaction in supported logs and diagnostics.
 - Repository exclusions for environment files, keys, tokens, databases, and vault data.
 
@@ -408,9 +430,9 @@ More specifications:
 
 ## Synchronization model
 
-The managed workspace is a controlled interchange layer for manifests, file-based memories, skills, supported configs, exports, snapshots, and revision metadata.
+The managed workspace is a controlled interchange layer for manifests, file-based memories, skills, supported configs, exports, snapshots, revision metadata, and Shared Vault ciphertext.
 
-Hermes Hub rejects or excludes active SQLite files, `-wal`, `-shm`, locks, partial writes, vault key material, and files outside configured scope. When two devices modify the same managed asset, the engine records a conflict instead of silently overwriting one version. Preserve both versions and create a backup before manual conflict intervention.
+Hermes Hub rejects or excludes active SQLite files, `-wal`, `-shm`, locks, partial writes, plaintext secrets, remembered Vault key material, and files outside configured scope. When two devices modify the same managed asset, the engine records a conflict instead of silently overwriting one version. Preserve both versions and create a backup before manual conflict intervention.
 
 ## Backups and recovery
 
@@ -419,6 +441,17 @@ Hermes Hub rejects or excludes active SQLite files, `-wal`, `-shm`, locks, parti
 - Restoration creates a pre-restore rollback snapshot.
 - Retention prunes older managed backups only after successful creation.
 - Retention is not a substitute for an independent offline backup.
+
+### Moving to a new PC
+
+Open **Backups → Recovery Center → Create migration bundle**. Choose an external drive or another local destination. The generated folder contains:
+
+- A versioned migration manifest and selected application preferences.
+- Safe workspace memories, skills, and configuration representations.
+- The Shared Vault encrypted file, when configured.
+- Restore instructions suitable for the destination PC.
+
+Install Hermes Hub on the new PC, open **Backups → Recovery Center → Import migration bundle**, select the folder, and confirm. Hermes Hub creates a rollback backup before importing. Then open Vault and use the same Shared Vault password. Live databases, application binaries, Windows-protected remembered keys, and plaintext secret values are not placed in the bundle.
 
 ## Troubleshooting
 
@@ -456,7 +489,7 @@ Close other Hermes Hub windows, check disk space, retry, or download the install
 
 ### Vault cannot decrypt
 
-Do not overwrite it. Preserve the entire vault directory. The Windows-protected key may belong to another profile or the file may be damaged. Restore from a known-good backup where available.
+Confirm that the password is exactly the one used by the PC that created or last changed the Shared Vault. If Syncthing reports a conflict, preserve every conflict copy. Do not create a new Vault over the existing file. Restore the encrypted file from a migration bundle or known-good backup when necessary.
 
 ### App closes to tray
 
@@ -563,7 +596,9 @@ Current limitations:
 - Search is private lexical full-text search, not semantic search.
 - Updates require GitHub Releases access.
 
-Completed for v0.3 public beta: desktop foundation, local agent, Hermes discovery, adapters, registry, pairing, workspace, manifests, per-device sync baselines, conflict recovery/tombstones, Main PC baseline onboarding, two-way safe-file propagation, universal local Command Center, persistent activity, encrypted Vault, backups and recovery browsing, tray, diagnostics, onboarding, health, NSIS installer, manual/automatic updater, Developer Mode, and in-app Help.
+Completed for v0.4: password-unlocked Shared Vault transport, previous-Vault migration, expanded credential types, reusable `.env` profiles, remembered per-PC access, Vault conflict visibility, and migration bundle export/import with automatic rollback backup.
+
+Completed for v0.3 public beta: desktop foundation, local agent, Hermes discovery, adapters, registry, pairing, workspace, manifests, per-device sync baselines, conflict recovery/tombstones, Main PC baseline onboarding, two-way safe-file propagation, universal local Command Center, persistent activity, encrypted local Vault, backups and recovery browsing, tray, diagnostics, onboarding, health, NSIS installer, manual/automatic updater, Developer Mode, and in-app Help.
 
 Planned: richer unified text diffs and rename matching, optional semantic search, more granular category policies per device, Windows code signing, and evaluation of additional packaged platforms after Windows stabilizes.
 

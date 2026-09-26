@@ -55,4 +55,4 @@ Each synchronized object tracks:
   5. Automatic content merging is not part of the v0.3 beta; ambiguous changes always require a choice.
   6. Live SQLite files are NEVER merged; only supported safe files and exported records are compared.
 
-Vault files, master keys, live databases, diagnostics, credentials, and tokens are never stored in `HermesHubData`.
+The encrypted `vault/shared-vault.enc` transport file may be stored in `HermesHubData`. Vault passwords, remembered unlock keys, plaintext credentials, live databases, diagnostics, and tokens outside that encrypted container are never stored there or included in manifests.

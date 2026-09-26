@@ -6,6 +6,7 @@ export * from './sync/MeshCoordinatorService.js';
 export * from './activity/ActivityService.js';
 export * from './search/SearchService.js';
 export * from './vault/VaultService.js';
+export * from './vault/SharedVaultService.js';
 export * from './backups/BackupService.js';
 export * from './revisions/RevisionService.js';
 export * from './diagnostics/DiagnosticsService.js';

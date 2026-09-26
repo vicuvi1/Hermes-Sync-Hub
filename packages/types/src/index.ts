@@ -230,12 +230,61 @@ export interface HermesFile {
 export interface VaultSecret {
   id: string;
   key: string;
-  category: 'API Keys' | 'Auth Tokens' | 'Tailscale' | 'Custom';
+  category: 'API Keys' | 'Auth Tokens' | 'Passwords' | 'SSH Keys' | 'Certificates' | 'Recovery Codes' | 'Tailscale' | 'Custom';
   value: string;
   description?: string;
   isMasked: boolean;
   updatedAt: string;
   originDevice: string;
+  favorite?: boolean;
+  tags?: string[];
+  expiresAt?: string;
+}
+
+export interface VaultEnvironmentVariable {
+  key: string;
+  value: string;
+  description?: string;
+  isMasked: boolean;
+}
+
+export interface VaultEnvironmentProfile {
+  id: string;
+  name: string;
+  description?: string;
+  variables: VaultEnvironmentVariable[];
+  updatedAt: string;
+  originDevice: string;
+}
+
+export interface SharedVaultStatus {
+  configured: boolean;
+  locked: boolean;
+  rememberedOnThisPc: boolean;
+  syncPath: string;
+  updatedAt?: string;
+  revision: number;
+  secretCount: number;
+  environmentCount: number;
+  conflictFiles: string[];
+}
+
+export interface VaultSetupInput {
+  password: string;
+  rememberOnThisPc: boolean;
+  importExistingLocalVault?: boolean;
+}
+
+export interface VaultUnlockInput {
+  password: string;
+  rememberOnThisPc: boolean;
+}
+
+export interface MigrationBundleResult {
+  success: boolean;
+  filePath?: string;
+  message: string;
+  requiresRestart?: boolean;
 }
 
 export type ActivityEventType =

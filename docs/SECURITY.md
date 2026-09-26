@@ -11,25 +11,24 @@ The primary UX objective is **zero-friction productivity without artificial blin
 
 ## 2. Master Key Storage
 
-The master vault encryption key is never written directly to a plain configuration file. Instead, Hermes Hub uses the operating system's native hardware/secure credential manager:
-- **Windows**: Windows Credential Manager (`wincred` API via Node safeStorage / keytar).
-- **macOS**: Keychain Services.
-- **Linux**: Secret Service API / libsecret.
+The Shared Vault password is never written to a plain configuration file. Hermes Hub derives a 256-bit key using `scrypt` and a random salt stored with the encrypted container. If **Remember on this PC** is selected, the derived key is protected by the operating system credential mechanism and kept outside the synchronized workspace:
+- **Windows**: Electron `safeStorage`, backed by Windows DPAPI for the current Windows user.
+- Other platforms are not production targets for v0.4.
 
-When a device first joins the Hub, the user provides or imports their mesh passphrase, which is derived using PBKDF2 (100,000 iterations + SHA-256 salt) into an AES-256-GCM symmetric key and saved into the OS credential store.
+When another PC receives `vault/shared-vault.enc`, the user enters the same password. The app derives the same key from the password and salt, verifies the AES-GCM authentication tag, and unlocks the contents in memory. The password is not saved; only the optional derived key is stored through `safeStorage`.
 
 ---
 
 ## 3. Vault Operations in the UI
 
 1. **Masked by Default**: Values appear as `••••••••••••••••` to avoid accidental shoulder-surfing or screen-sharing leaks.
-2. **Instant Reveal & Copy**: Clicking `Reveal` or `Copy` instantly surfaces or copies the raw secret (with an optional confirmation prompt if enabled in Settings).
+2. **Instant Reveal & Copy**: Clicking `Reveal` or `Copy` surfaces the raw secret. Reveals hide after one minute and copied values are cleared after 30 seconds when the clipboard still contains the same value.
 3. **Structured Secret Types**:
-   - `OPENROUTER_API_KEY`
-   - `OPENAI_API_KEY`
-   - `ANTHROPIC_API_KEY`
-   - `TAILSCALE_AUTHKEY`
-   - `CUSTOM_ENV_SECRETS`
+   - API keys and authentication tokens
+   - Passwords and recovery codes
+   - SSH private keys and certificates
+   - Tailscale credentials and custom values
+   - Reusable `.env` profiles
 
 ---
 

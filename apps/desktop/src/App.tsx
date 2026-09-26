@@ -56,6 +56,11 @@ import {
   SourceRepositoryStatus,
   SyncthingState,
   TailscaleState,
+  SharedVaultStatus,
+  VaultEnvironmentProfile,
+  VaultSetupInput,
+  VaultUnlockInput,
+  MigrationBundleResult,
   VaultSecret,
 } from '@hermes-hub/types';
 import { AgentHealthResponse } from '@hermes-hub/protocol';
@@ -133,9 +138,20 @@ declare global {
       showNotification: (title: string, body: string) => Promise<boolean>;
       getDiagnosticsReport: () => Promise<any>;
       getVaultSecrets: () => Promise<VaultSecret[]>;
+      getVaultStatus: () => Promise<SharedVaultStatus>;
+      setupSharedVault: (input: VaultSetupInput) => Promise<SharedVaultStatus>;
+      unlockSharedVault: (input: VaultUnlockInput) => Promise<SharedVaultStatus>;
+      lockSharedVault: () => Promise<SharedVaultStatus>;
+      changeVaultPassword: (currentPassword: string, newPassword: string, rememberOnThisPc: boolean) => Promise<SharedVaultStatus>;
       getVaultSecret: (id: string) => Promise<VaultSecret | null>;
       saveVaultSecret: (secret: VaultSecret) => Promise<VaultSecret>;
       deleteVaultSecret: (id: string) => Promise<boolean>;
+      getVaultEnvironments: () => Promise<VaultEnvironmentProfile[]>;
+      getVaultEnvironment: (id: string) => Promise<VaultEnvironmentProfile | null>;
+      saveVaultEnvironment: (profile: VaultEnvironmentProfile) => Promise<VaultEnvironmentProfile>;
+      deleteVaultEnvironment: (id: string) => Promise<boolean>;
+      createMigrationBundle: () => Promise<MigrationBundleResult>;
+      importMigrationBundle: (confirmed: boolean) => Promise<MigrationBundleResult>;
       getRuntimeHealth: () => Promise<RuntimeHealth>;
       getOnboardingState: () => Promise<OnboardingState>;
       completeOnboarding: (input: CompleteOnboardingInput) => Promise<AppSettings>;
@@ -158,6 +174,7 @@ export const App: React.FC = () => {
   const [skills, setSkills] = useState<HermesSkill[]>([]);
   const [files, setFiles] = useState<HermesFile[]>([]);
   const [vaultSecrets, setVaultSecrets] = useState<VaultSecret[]>([]);
+  const [vaultStatus, setVaultStatus] = useState<SharedVaultStatus | null>(null);
   const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [backups, setBackups] = useState<BackupRecord[]>([]);
 
@@ -240,14 +257,18 @@ export const App: React.FC = () => {
         setDevices(MOCK_DEVICES); setStats(MOCK_OVERALL_STATS); setActiveTransfer(MOCK_ACTIVE_TRANSFER);
         setSessions(MOCK_SESSIONS); setMemories(MOCK_MEMORIES); setSkills(MOCK_SKILLS); setFiles(MOCK_FILES);
         setVaultSecrets(MOCK_VAULT_SECRETS); setActivity(MOCK_ACTIVITY); setBackups(MOCK_BACKUPS);
+        setVaultStatus({ configured: true, locked: false, rememberedOnThisPc: true, syncPath: 'Demo Mode', revision: 1, secretCount: MOCK_VAULT_SECRETS.length, environmentCount: 0, conflictFiles: [] });
         return;
       }
+
+      const sharedVaultStatus = await window.hermesHub.getVaultStatus();
+      setVaultStatus(sharedVaultStatus);
 
       const results = await Promise.allSettled([
         window.hermesHub.getDevices(), window.hermesHub.getOverallStats(), window.hermesHub.getAgentHealth(),
         window.hermesHub.getTailscaleState(), window.hermesHub.getSyncthingState(), window.hermesHub.getSessions(),
         window.hermesHub.getMemories(), window.hermesHub.getSkills(), window.hermesHub.getFiles(),
-        window.hermesHub.getVaultSecrets(), window.hermesHub.getActivity(), window.hermesHub.getBackups(),
+        sharedVaultStatus.locked ? Promise.resolve([]) : window.hermesHub.getVaultSecrets(), window.hermesHub.getActivity(), window.hermesHub.getBackups(),
         window.hermesHub.getRuntimeHealth(),
       ]);
       const value = <T,>(index: number, fallback: T): T => results[index].status === 'fulfilled' ? results[index].value as T : fallback;
@@ -487,6 +508,13 @@ export const App: React.FC = () => {
     return Boolean(removed);
   };
 
+  const refreshVault = async () => {
+    if (demoMode || !window.hermesHub) return;
+    const status = await window.hermesHub.getVaultStatus();
+    setVaultStatus(status);
+    setVaultSecrets(status.locked ? [] : await window.hermesHub.getVaultSecrets());
+  };
+
   const handleCompleteOnboarding = async (input: CompleteOnboardingInput) => {
     if (!window.hermesHub) throw new Error('Desktop bridge unavailable');
     await window.hermesHub.completeOnboarding(input);
@@ -573,7 +601,7 @@ export const App: React.FC = () => {
           {currentTab === 'files' && <FilesView files={files} initialSelectedFileId={location.tab === 'files' ? location.entityId : undefined} />}
 
           {currentTab === 'vault' && (
-            <VaultView secrets={vaultSecrets} onSaveSecret={handleSaveSecret} onRevealSecret={handleRevealSecret} onDeleteSecret={handleDeleteSecret} />
+            <VaultView secrets={vaultSecrets} status={vaultStatus} demoMode={demoMode} onRefresh={refreshVault} onSaveSecret={handleSaveSecret} onRevealSecret={handleRevealSecret} onDeleteSecret={handleDeleteSecret} />
           )}
 
           {currentTab === 'activity' && <ActivityView activities={activity} />}

@@ -14,6 +14,9 @@ import {
   SearchDocument,
   SearchEntityKind,
   SearchQuery,
+  VaultEnvironmentProfile,
+  VaultSetupInput,
+  VaultUnlockInput,
   SourceRepositoryPushInput,
   VaultSecret,
 } from '@hermes-hub/types';
@@ -35,6 +38,7 @@ import {
   RevisionService,
   DiagnosticsService,
   VaultService,
+  SharedVaultService,
   ActivityService,
   SearchService,
 } from '@hermes-hub/agent';
@@ -99,11 +103,16 @@ const agentServer = new AgentServer(
   diagnosticsService
 );
 let updateManager: UpdateManager | null = null;
-let vaultService: VaultService | null = null;
+let legacyVaultService: VaultService | null = null;
 let backupScheduleTimer: NodeJS.Timeout | null = null;
 const sourceRepositoryService = new SourceRepositoryService();
 const activityService = new ActivityService(deviceIdentity.getStorageDirectory());
 const searchService = new SearchService(path.join(deviceIdentity.getStorageDirectory(), 'search', 'index.json'));
+const sharedVaultService = new SharedVaultService(
+  path.join(workspaceService.getRootPath(), 'vault', 'shared-vault.enc'),
+  deviceIdentity.getLocalDevice().deviceName,
+);
+const rememberedVaultKeyPath = path.join(app.getPath('userData'), 'vault', 'shared-vault-key.bin');
 
 const SEARCH_KINDS = new Set<SearchEntityKind>(['session', 'memory', 'skill', 'file', 'device', 'backup', 'activity', 'setting', 'action']);
 
@@ -156,7 +165,7 @@ async function buildSearchDocuments(): Promise<SearchDocument[]> {
   const pages: Array<[string, string, AppLocation['tab'], string]> = [
     ['settings', 'Settings', 'settings', 'Application, integrations, privacy, updates and Developer Mode'],
     ['help', 'Help & README', 'help', 'Product handbook, setup and troubleshooting'],
-    ['vault', 'Vault', 'vault', 'Windows-protected secrets. Secret values are never indexed.'],
+    ['vault', 'Shared Vault', 'vault', 'Password-unlocked encrypted secrets and environment profiles. Secret values are never indexed.'],
   ];
   pages.forEach(([id, title, tab, body]) => documents.push(searchDocument(`setting:${id}`, 'setting', title, body, { tab })));
   const actions = [
@@ -206,8 +215,8 @@ async function runScheduledBackupIfDue(): Promise<void> {
 process.on('uncaughtException', (error) => appendCrashLog('uncaughtException', error));
 process.on('unhandledRejection', (error) => appendCrashLog('unhandledRejection', error));
 
-function getVaultService(): VaultService {
-  if (vaultService) return vaultService;
+function getLegacyVaultService(): VaultService {
+  if (legacyVaultService) return legacyVaultService;
   if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows secure storage is unavailable');
   const vaultDirectory = path.join(app.getPath('userData'), 'vault');
   const keyPath = path.join(vaultDirectory, 'master-key.bin');
@@ -219,8 +228,67 @@ function getVaultService(): VaultService {
     masterKey = crypto.randomBytes(32);
     fs.writeFileSync(keyPath, safeStorage.encryptString(masterKey.toString('base64')));
   }
-  vaultService = new VaultService(path.join(vaultDirectory, 'secrets.vault.enc'), masterKey);
-  return vaultService;
+  legacyVaultService = new VaultService(path.join(vaultDirectory, 'secrets.vault.enc'), masterKey);
+  return legacyVaultService;
+}
+
+function rememberSharedVaultKey(key: Buffer | null): void {
+  fs.mkdirSync(path.dirname(rememberedVaultKeyPath), { recursive: true });
+  if (!key) {
+    if (fs.existsSync(rememberedVaultKeyPath)) fs.unlinkSync(rememberedVaultKeyPath);
+    return;
+  }
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('Windows secure storage is unavailable.');
+  fs.writeFileSync(rememberedVaultKeyPath, safeStorage.encryptString(key.toString('base64')));
+}
+
+async function unlockRememberedSharedVault(): Promise<void> {
+  if (!sharedVaultService.isConfigured() || !fs.existsSync(rememberedVaultKeyPath) || !safeStorage.isEncryptionAvailable()) return;
+  try {
+    const key = Buffer.from(safeStorage.decryptString(fs.readFileSync(rememberedVaultKeyPath)), 'base64');
+    await sharedVaultService.unlockWithKey(key);
+    key.fill(0);
+  } catch (error) {
+    appendCrashLog('shared-vault-auto-unlock', error);
+    rememberSharedVaultKey(null);
+  }
+}
+
+function validateVaultSecret(value: unknown): VaultSecret {
+  if (!value || typeof value !== 'object') throw new Error('Secret details are required.');
+  const secret = value as VaultSecret;
+  const categories: VaultSecret['category'][] = ['API Keys', 'Auth Tokens', 'Passwords', 'SSH Keys', 'Certificates', 'Recovery Codes', 'Tailscale', 'Custom'];
+  if (!categories.includes(secret.category)) throw new Error('Unsupported secret category.');
+  return {
+    ...secret,
+    id: requireString(secret.id, 'Secret ID', 100),
+    key: requireString(secret.key, 'Secret name', 200),
+    value: requireString(secret.value, 'Secret value', 100_000),
+    description: typeof secret.description === 'string' ? secret.description.slice(0, 2_000) : undefined,
+    updatedAt: new Date().toISOString(),
+    originDevice: deviceIdentity.getLocalDevice().deviceName,
+    isMasked: false,
+  };
+}
+
+function validateEnvironment(value: unknown): VaultEnvironmentProfile {
+  if (!value || typeof value !== 'object') throw new Error('Environment profile is required.');
+  const profile = value as VaultEnvironmentProfile;
+  if (!Array.isArray(profile.variables) || profile.variables.length > 500) throw new Error('Environment profile may contain up to 500 variables.');
+  const variables = profile.variables.map((variable) => ({
+    key: requireString(variable.key, 'Variable name', 200),
+    value: typeof variable.value === 'string' && variable.value.length <= 100_000 ? variable.value : (() => { throw new Error('Variable value is too large.'); })(),
+    description: typeof variable.description === 'string' ? variable.description.slice(0, 1_000) : undefined,
+    isMasked: false,
+  }));
+  return {
+    id: requireString(profile.id, 'Environment ID', 100),
+    name: requireString(profile.name, 'Environment name', 100),
+    description: typeof profile.description === 'string' ? profile.description.slice(0, 2_000) : undefined,
+    variables,
+    updatedAt: new Date().toISOString(),
+    originDevice: deviceIdentity.getLocalDevice().deviceName,
+  };
 }
 
 async function getRuntimeHealth(): Promise<RuntimeHealth> {
@@ -587,10 +655,48 @@ ipcMain.handle(IPC_CHANNELS.DELETE_SAVED_SEARCH, async (_event, id: unknown) => 
   return true;
 });
 
-ipcMain.handle(IPC_CHANNELS.GET_VAULT_SECRETS, async () => getVaultService().listSecrets());
-ipcMain.handle(IPC_CHANNELS.GET_VAULT_SECRET, async (_event, id: string) => getVaultService().getSecret(id));
-ipcMain.handle(IPC_CHANNELS.SAVE_VAULT_SECRET, async (_event, secret: VaultSecret) => getVaultService().saveSecret(secret));
-ipcMain.handle(IPC_CHANNELS.DELETE_VAULT_SECRET, async (_event, id: string) => getVaultService().deleteSecret(id));
+ipcMain.handle(IPC_CHANNELS.GET_VAULT_STATUS, async () => sharedVaultService.getStatus(fs.existsSync(rememberedVaultKeyPath)));
+ipcMain.handle(IPC_CHANNELS.SETUP_SHARED_VAULT, async (_event, input: VaultSetupInput) => {
+  if (!input || typeof input !== 'object') throw new Error('Vault setup details are required.');
+  const password = requireString(input.password, 'Vault password', 512);
+  let existingSecrets: VaultSecret[] = [];
+  if (input.importExistingLocalVault) {
+    const legacy = getLegacyVaultService();
+    const listed = await legacy.listSecrets();
+    existingSecrets = (await Promise.all(listed.map((secret) => legacy.getSecret(secret.id)))).filter((secret): secret is VaultSecret => Boolean(secret));
+  }
+  const key = await sharedVaultService.setup(password, existingSecrets);
+  rememberSharedVaultKey(input.rememberOnThisPc ? key : null);
+  key.fill(0);
+  activityService.record({ type: 'health_warning', title: 'Shared Vault configured', description: `Encrypted Vault transport is ready with ${existingSecrets.length} imported item(s).`, sourceDevice: deviceIdentity.getLocalDevice().deviceName, status: 'success' });
+  return sharedVaultService.getStatus(fs.existsSync(rememberedVaultKeyPath));
+});
+ipcMain.handle(IPC_CHANNELS.UNLOCK_SHARED_VAULT, async (_event, input: VaultUnlockInput) => {
+  if (!input || typeof input !== 'object') throw new Error('Vault unlock details are required.');
+  const key = await sharedVaultService.unlock(requireString(input.password, 'Vault password', 512));
+  rememberSharedVaultKey(input.rememberOnThisPc ? key : null);
+  key.fill(0);
+  return sharedVaultService.getStatus(fs.existsSync(rememberedVaultKeyPath));
+});
+ipcMain.handle(IPC_CHANNELS.LOCK_SHARED_VAULT, async () => {
+  sharedVaultService.lock();
+  rememberSharedVaultKey(null);
+  return sharedVaultService.getStatus(false);
+});
+ipcMain.handle(IPC_CHANNELS.CHANGE_VAULT_PASSWORD, async (_event, currentPassword: unknown, newPassword: unknown, rememberOnThisPc: boolean) => {
+  const key = await sharedVaultService.changePassword(requireString(currentPassword, 'Current password', 512), requireString(newPassword, 'New password', 512));
+  rememberSharedVaultKey(rememberOnThisPc ? key : null);
+  key.fill(0);
+  return sharedVaultService.getStatus(fs.existsSync(rememberedVaultKeyPath));
+});
+ipcMain.handle(IPC_CHANNELS.GET_VAULT_SECRETS, async () => sharedVaultService.listSecrets());
+ipcMain.handle(IPC_CHANNELS.GET_VAULT_SECRET, async (_event, id: unknown) => sharedVaultService.getSecret(requireString(id, 'Secret ID', 100)));
+ipcMain.handle(IPC_CHANNELS.SAVE_VAULT_SECRET, async (_event, secret: unknown) => sharedVaultService.saveSecret(validateVaultSecret(secret)));
+ipcMain.handle(IPC_CHANNELS.DELETE_VAULT_SECRET, async (_event, id: unknown) => sharedVaultService.deleteSecret(requireString(id, 'Secret ID', 100)));
+ipcMain.handle(IPC_CHANNELS.GET_VAULT_ENVIRONMENTS, async () => sharedVaultService.listEnvironments());
+ipcMain.handle(IPC_CHANNELS.GET_VAULT_ENVIRONMENT, async (_event, id: unknown) => sharedVaultService.getEnvironment(requireString(id, 'Environment ID', 100)));
+ipcMain.handle(IPC_CHANNELS.SAVE_VAULT_ENVIRONMENT, async (_event, profile: unknown) => sharedVaultService.saveEnvironment(validateEnvironment(profile)));
+ipcMain.handle(IPC_CHANNELS.DELETE_VAULT_ENVIRONMENT, async (_event, id: unknown) => sharedVaultService.deleteEnvironment(requireString(id, 'Environment ID', 100)));
 
 ipcMain.handle(IPC_CHANNELS.GET_SESSION_DETAIL, async (_event, sessionId: string) => {
   return sessionService.getSessionDetail(sessionId);
@@ -627,6 +733,81 @@ ipcMain.handle(IPC_CHANNELS.RESTORE_BACKUP, async (_event, options: any) => {
 
 ipcMain.handle(IPC_CHANNELS.DELETE_BACKUP, async (_event, backupId: string) => {
   return backupService.deleteBackup(backupId);
+});
+
+ipcMain.handle(IPC_CHANNELS.CREATE_MIGRATION_BUNDLE, async () => {
+  const result = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, { title: 'Choose where to create the migration bundle', properties: ['openDirectory', 'createDirectory'] })
+    : await dialog.showOpenDialog({ title: 'Choose where to create the migration bundle', properties: ['openDirectory', 'createDirectory'] });
+  if (result.canceled || !result.filePaths[0]) return { success: false, message: 'Migration export cancelled.' };
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const bundlePath = path.join(result.filePaths[0], `Hermes-Hub-Migration-${stamp}`);
+  fs.mkdirSync(bundlePath, { recursive: true });
+  const workspaceExport = path.join(bundlePath, 'workspace');
+  fs.mkdirSync(workspaceExport, { recursive: true });
+  const layout = workspaceService.getLayout();
+  for (const category of ['memories', 'skills', 'configs'] as const) {
+    const source = layout[category];
+    if (source && fs.existsSync(source)) fs.cpSync(source, path.join(workspaceExport, category), { recursive: true });
+  }
+  if (sharedVaultService.isConfigured()) fs.copyFileSync(sharedVaultService.getPath(), path.join(bundlePath, 'shared-vault.enc'));
+  const settings = settingsManager.getSettings();
+  const manifest = {
+    version: 1,
+    createdAt: new Date().toISOString(),
+    sourceDevice: deviceIdentity.getLocalDevice().deviceName,
+    includesSharedVault: sharedVaultService.isConfigured(),
+    preferences: {
+      theme: settings.theme,
+      closeToTray: settings.closeToTray,
+      notificationsEnabled: settings.notificationsEnabled,
+      autoBackupEnabled: settings.autoBackupEnabled,
+      autoBackupFrequency: settings.autoBackupFrequency,
+      maxBackupsToRetain: settings.maxBackupsToRetain,
+    },
+  };
+  fs.writeFileSync(path.join(bundlePath, 'migration-manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+  fs.writeFileSync(path.join(bundlePath, 'RESTORE-INSTRUCTIONS.txt'), 'Open Hermes Hub > Backups > Recovery Center > Import migration bundle. Select this folder. The Shared Vault remains encrypted and requires the same password.\r\n', 'utf8');
+  activityService.record({ type: 'backup_created', title: 'Migration bundle created', description: 'Settings, safe workspace files, and the encrypted Shared Vault were exported.', sourceDevice: deviceIdentity.getLocalDevice().deviceName, status: 'success' });
+  return { success: true, filePath: bundlePath, message: 'Migration bundle created. Keep the folder together when moving it to another PC.' };
+});
+
+ipcMain.handle(IPC_CHANNELS.IMPORT_MIGRATION_BUNDLE, async (_event, confirmed: boolean) => {
+  if (confirmed !== true) throw new Error('Migration import requires confirmation.');
+  const result = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, { title: 'Choose a Hermes Hub migration bundle', properties: ['openDirectory'] })
+    : await dialog.showOpenDialog({ title: 'Choose a Hermes Hub migration bundle', properties: ['openDirectory'] });
+  if (result.canceled || !result.filePaths[0]) return { success: false, message: 'Migration import cancelled.' };
+  const bundlePath = result.filePaths[0];
+  const manifestPath = path.join(bundlePath, 'migration-manifest.json');
+  if (!fs.existsSync(manifestPath)) throw new Error('This folder is not a Hermes Hub migration bundle.');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { version?: number; preferences?: Record<string, unknown> };
+  if (manifest.version !== 1) throw new Error('Unsupported migration bundle version.');
+  const backup = await backupService.createBackup({ name: 'Before migration import', notes: 'Automatic rollback point before importing a PC migration bundle.' });
+  const workspaceImport = path.join(bundlePath, 'workspace');
+  const layout = workspaceService.getLayout();
+  for (const category of ['memories', 'skills', 'configs'] as const) {
+    const source = path.join(workspaceImport, category);
+    if (fs.existsSync(source)) fs.cpSync(source, layout[category], { recursive: true, force: true });
+  }
+  const importedVault = path.join(bundlePath, 'shared-vault.enc');
+  if (fs.existsSync(importedVault)) {
+    fs.mkdirSync(path.dirname(sharedVaultService.getPath()), { recursive: true });
+    if (fs.existsSync(sharedVaultService.getPath())) {
+      const recoveryPath = path.join(workspaceService.getRootPath(), 'backups', `vault-before-migration-${Date.now()}.enc`);
+      fs.mkdirSync(path.dirname(recoveryPath), { recursive: true });
+      fs.copyFileSync(sharedVaultService.getPath(), recoveryPath);
+    }
+    sharedVaultService.lock();
+    rememberSharedVaultKey(null);
+    fs.copyFileSync(importedVault, sharedVaultService.getPath());
+  }
+  const allowed = ['theme', 'closeToTray', 'notificationsEnabled', 'autoBackupEnabled', 'autoBackupFrequency', 'maxBackupsToRetain'];
+  const preferenceUpdates = Object.fromEntries(Object.entries(manifest.preferences || {}).filter(([key]) => allowed.includes(key)));
+  settingsManager.updateSettings(preferenceUpdates);
+  await workspaceService.generateManifest();
+  activityService.record({ type: 'backup_created', title: 'Migration bundle imported', description: `Imported after creating rollback backup ${backup.id}.`, sourceDevice: deviceIdentity.getLocalDevice().deviceName, status: 'success' });
+  return { success: true, filePath: bundlePath, message: 'Migration imported. Unlock the Shared Vault with the same password.', requiresRestart: false };
 });
 
 ipcMain.handle(IPC_CHANNELS.GET_FILE_REVISIONS, async (_event, filePath?: string) => {
@@ -762,11 +943,12 @@ app.on('second-instance', () => {
   }
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // Create the desktop window first. Network or integration startup must never
   // prevent the control center from becoming visible.
   createWindow();
   updateManager = new UpdateManager(() => mainWindow);
+  await unlockRememberedSharedVault();
 
   agentServer.start()
     .then((port) => console.log(`[AgentServer] Loopback HTTP server running on 127.0.0.1:${port}`))

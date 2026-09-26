@@ -23,7 +23,7 @@ jobs:
         shell: pwsh
         run: |
           $tracked = git ls-files
-          $bad = $tracked | Where-Object { $_ -match '(\.db(-wal|-shm)?$|\.env$|secrets\.vault|diagnostics.*\.json$|device-identity\.json$)' }
+          $bad = $tracked | Where-Object { $_ -match '(\.db(-wal|-shm)?$|\.env$|secrets\.vault|shared-vault\.enc$|master-key\.bin$|shared-vault-key\.bin$|diagnostics.*\.json$|device-identity\.json$)' }
           if ($bad) { $bad; throw 'Private runtime artifacts must not be committed.' }
       - name: Package Windows smoke artifact
         run: pnpm --filter @hermes-hub/desktop exec electron-builder --win dir --x64 --publish never
