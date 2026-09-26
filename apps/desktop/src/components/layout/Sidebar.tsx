@@ -10,6 +10,7 @@ import {
   Activity,
   Archive,
   Settings,
+  BookOpen,
   Cpu,
   X,
 } from 'lucide-react';
@@ -24,7 +25,8 @@ export type NavTab =
   | 'vault'
   | 'activity'
   | 'backups'
-  | 'settings';
+  | 'settings'
+  | 'help';
 
 interface SidebarProps {
   currentTab: NavTab;
@@ -45,6 +47,7 @@ const NAV_ITEMS: { id: NavTab; label: string; icon: React.ComponentType<{ classN
   { id: 'activity', label: 'Activity', icon: Activity },
   { id: 'backups', label: 'Backups', icon: Archive },
   { id: 'settings', label: 'Settings', icon: Settings },
+  { id: 'help', label: 'Help & README', icon: BookOpen },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange, onlineDevicesCount, isOpen = false, onClose }) => {

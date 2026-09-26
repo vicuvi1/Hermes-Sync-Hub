@@ -524,6 +524,13 @@ ipcMain.handle(IPC_CHANNELS.OPEN_FOLDER, async (_event, folderPath: string) => {
   return true;
 });
 
+ipcMain.handle(IPC_CHANNELS.GET_README, async () => {
+  const readmePath = app.isPackaged
+    ? path.join(process.resourcesPath, 'README.md')
+    : path.resolve(__dirname, '../../..', 'README.md');
+  return fs.readFileSync(readmePath, 'utf8');
+});
+
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
 

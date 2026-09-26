@@ -1,6 +1,6 @@
 {
   "name": "@hermes-hub/desktop",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "productName": "Hermes Hub",
   "description": "Local-first control center for Hermes Agent devices",
   "author": "vicuvi1",
@@ -27,6 +27,8 @@
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
@@ -57,11 +59,19 @@
       "dist-electron/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "../../README.md",
+        "to": "README.md"
+      }
+    ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.png",

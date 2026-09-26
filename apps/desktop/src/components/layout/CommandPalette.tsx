@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, LayoutDashboard, Laptop, MessageSquare, Brain, Sparkles, FolderSync, KeyRound, Activity, Archive, Settings, RefreshCw, Plus, X } from 'lucide-react';
+import { Search, LayoutDashboard, Laptop, MessageSquare, Brain, Sparkles, FolderSync, KeyRound, Activity, Archive, Settings, RefreshCw, Plus, X, BookOpen } from 'lucide-react';
 import { NavTab } from './Sidebar';
 
 interface CommandPaletteProps {
@@ -13,7 +13,7 @@ interface CommandPaletteProps {
 const destinations: Array<{ id: NavTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   ['dashboard', 'Dashboard', LayoutDashboard], ['devices', 'Devices', Laptop], ['sessions', 'Sessions', MessageSquare],
   ['memory', 'Memory', Brain], ['skills', 'Skills', Sparkles], ['files', 'Files', FolderSync], ['vault', 'Vault', KeyRound],
-  ['activity', 'Activity', Activity], ['backups', 'Backups', Archive], ['settings', 'Settings', Settings],
+  ['activity', 'Activity', Activity], ['backups', 'Backups', Archive], ['settings', 'Settings', Settings], ['help', 'Help & README', BookOpen],
 ].map(([id, label, icon]) => ({ id: id as NavTab, label: label as string, icon: icon as React.ComponentType<{ className?: string }> }));
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onNavigate, onSync, onAddDevice }) => {

@@ -20,6 +20,7 @@ export const IPC_CHANNELS = {
   EXPORT_DIAGNOSTICS: 'hermes-hub:export-diagnostics',
   OPEN_EXTERNAL_URL: 'hermes-hub:open-external-url',
   OPEN_FOLDER: 'hermes-hub:open-folder',
+  GET_README: 'hermes-hub:get-readme',
 
   // Milestone 2 Local Agent channels
   GET_LOCAL_DEVICE: 'hermes-hub:get-local-device',

@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('hermesHub', {
   pingAgent: () => ipcRenderer.invoke(IPC_CHANNELS.PING_AGENT),
   triggerSync: () => ipcRenderer.invoke(IPC_CHANNELS.TRIGGER_SYNC_NOW),
   openFolder: (path: string) => ipcRenderer.invoke(IPC_CHANNELS.OPEN_FOLDER, path),
+  getReadme: () => ipcRenderer.invoke(IPC_CHANNELS.GET_README),
   exportDiagnostics: () => ipcRenderer.invoke(IPC_CHANNELS.EXPORT_DIAGNOSTICS),
   getHermesStatus: () => ipcRenderer.invoke(IPC_CHANNELS.GET_HERMES_STATUS),
   getTailscaleState: () => ipcRenderer.invoke(IPC_CHANNELS.GET_TAILSCALE_STATE),

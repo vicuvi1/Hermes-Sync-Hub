@@ -49,6 +49,8 @@ import {
 } from '@hermes-hub/types';
 import { AgentHealthResponse } from '@hermes-hub/protocol';
 
+const HelpView = React.lazy(() => import('./components/help/HelpView').then((module) => ({ default: module.HelpView })));
+
 declare global {
   interface Window {
     hermesHub?: {
@@ -59,6 +61,7 @@ declare global {
       pingAgent: () => Promise<{ pong: boolean; time: string }>;
       triggerSync: () => Promise<{ success: boolean }>;
       openFolder: (path: string) => Promise<boolean>;
+      getReadme: () => Promise<string>;
       exportDiagnostics: (outputPath?: string) => Promise<{ success: boolean; filePath?: string; report?: any }>;
       getHermesStatus: () => Promise<any>;
       getTailscaleState: () => Promise<TailscaleState>;
@@ -541,6 +544,8 @@ export const App: React.FC = () => {
               onRefreshSyncthing={fetchSyncthingState}
             />
           )}
+
+          {currentTab === 'help' && <React.Suspense fallback={<div className="py-20 text-center text-sm text-muted-foreground">Loading handbook…</div>}><HelpView /></React.Suspense>}
         </main>
       </div>
 
