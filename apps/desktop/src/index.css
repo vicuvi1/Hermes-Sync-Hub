@@ -53,6 +53,23 @@ body {
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   user-select: none;
   overflow-x: hidden;
+  background: hsl(var(--background));
+}
+
+.app-content {
+  background-image:
+    radial-gradient(circle at 18% -10%, hsl(var(--primary) / 0.08), transparent 28rem),
+    linear-gradient(to bottom, hsl(var(--background)), hsl(var(--muted) / 0.22));
+}
+
+.dark .app-content {
+  background-image:
+    radial-gradient(circle at 16% -12%, hsl(var(--primary) / 0.12), transparent 30rem),
+    linear-gradient(to bottom, hsl(var(--background)), hsl(224 25% 5%));
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.25);
 }
 
 button, input, select, textarea {

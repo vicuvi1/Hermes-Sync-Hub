@@ -530,7 +530,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
+    <div className="app-shell flex h-screen w-screen overflow-hidden bg-background text-foreground font-sans">
       {/* Left Sidebar */}
       <Sidebar
         currentTab={currentTab}
@@ -561,7 +561,7 @@ export const App: React.FC = () => {
         />
 
         {/* View Container */}
-        <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+        <main className="app-content flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
           {demoMode && <div className="mb-5 flex items-center justify-between rounded-xl border border-violet-500/25 bg-violet-500/10 px-4 py-2.5 text-xs text-violet-600 dark:text-violet-300"><span><strong>Demo Mode</strong> — all content on this screen is sample data.</span><button onClick={() => setCurrentTab('settings')} className="font-semibold hover:underline">Change</button></div>}
           {dataError && <div className="mb-5 flex items-center justify-between rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-2.5 text-xs text-amber-700 dark:text-amber-300"><span>{dataError}</span><button onClick={loadHubData} className="font-semibold hover:underline">Retry</button></div>}
           {currentTab === 'dashboard' && (

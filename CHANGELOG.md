@@ -2,6 +2,16 @@
 
 All notable changes are documented here. The project uses semantic version tags.
 
+## 0.4.1 — Interface refinement
+
+### Changed
+
+- Grouped navigation into Workspace, Mesh & safety, and Application sections for faster scanning.
+- Refined the application header with clearer breadcrumbs, search affordance, and action hierarchy.
+- Added Shared Vault summary cards for secrets, environments, revision state, and upcoming expirations.
+- Improved Vault tabs, conflict messaging, responsive spacing, and visual feedback.
+- Added subtle workspace depth and clearer focus styling across light and dark themes.
+
 ## 0.4.0 — Shared workspace milestone
 
 ### Added
