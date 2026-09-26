@@ -62,6 +62,10 @@ declare global {
       getSyncSummary: () => Promise<any>;
       getSyncConflicts: () => Promise<any>;
       resolveSyncConflict: (conflictId: string, resolution: any) => Promise<any>;
+      getSessions: (options?: any) => Promise<any[]>;
+      getSessionDetail: (sessionId: string) => Promise<any>;
+      exportSession: (options: any) => Promise<any>;
+      importSession: (payload: any) => Promise<any>;
     };
   }
 }
@@ -121,11 +125,12 @@ export const App: React.FC = () => {
     async function initLocalAgent() {
       if (window.hermesHub) {
         try {
-          const [loadedDevices, health, ts, sync] = await Promise.all([
+          const [loadedDevices, health, ts, sync, loadedSessions] = await Promise.all([
             window.hermesHub.getDevices(),
             window.hermesHub.getAgentHealth(),
             window.hermesHub.getTailscaleState ? window.hermesHub.getTailscaleState() : Promise.resolve(null),
             window.hermesHub.getSyncthingState ? window.hermesHub.getSyncthingState() : Promise.resolve(null),
+            window.hermesHub.getSessions ? window.hermesHub.getSessions() : Promise.resolve(null),
           ]);
           if (loadedDevices && loadedDevices.length > 0) {
             setDevices(loadedDevices);
@@ -141,6 +146,9 @@ export const App: React.FC = () => {
             if (sync.transferState?.activeTransfers?.length > 0) {
               setActiveTransfer(sync.transferState.activeTransfers[0]);
             }
+          }
+          if (loadedSessions && loadedSessions.length > 0) {
+            setSessions(loadedSessions);
           }
         } catch (err) {
           console.warn('Failed to initialize local agent data over IPC:', err);

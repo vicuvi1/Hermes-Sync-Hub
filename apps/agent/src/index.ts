@@ -12,3 +12,4 @@ export * from './devices/DeviceRegistry.js';
 export * from './sync/SyncthingAdapter.js';
 export * from './pairing/PairingService.js';
 export * from './workspace/WorkspaceService.js';
+export * from './sessions/SessionService.js';

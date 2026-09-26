@@ -15,6 +15,7 @@ import {
   PairingService,
   WorkspaceService,
   SyncEngineService,
+  HermesSessionService,
 } from '@hermes-hub/agent';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -41,6 +42,7 @@ const syncEngine = new SyncEngineService(
   deviceRegistry,
   syncthingAdapter
 );
+const sessionService = new HermesSessionService(hermesService, workspaceService);
 const agentServer = new AgentServer(
   deviceIdentity,
   healthMonitor,
@@ -50,7 +52,8 @@ const agentServer = new AgentServer(
   deviceRegistry,
   pairingService,
   workspaceService,
-  syncEngine
+  syncEngine,
+  sessionService
 );
 
 function createWindow() {
@@ -273,6 +276,23 @@ ipcMain.handle(IPC_CHANNELS.GET_SYNC_CONFLICTS, async () => {
 
 ipcMain.handle(IPC_CHANNELS.RESOLVE_SYNC_CONFLICT, async (_event, conflictId: string, resolution: any) => {
   return syncEngine.resolveConflict(conflictId, resolution);
+});
+
+// Milestone 10 Safe Session Access, Export & Import
+ipcMain.handle(IPC_CHANNELS.GET_SESSIONS, async (_event, options?: any) => {
+  return sessionService.listSessions(options || {});
+});
+
+ipcMain.handle(IPC_CHANNELS.GET_SESSION_DETAIL, async (_event, sessionId: string) => {
+  return sessionService.getSessionDetail(sessionId);
+});
+
+ipcMain.handle(IPC_CHANNELS.EXPORT_SESSION, async (_event, options: any) => {
+  return sessionService.exportSession(options);
+});
+
+ipcMain.handle(IPC_CHANNELS.IMPORT_SESSION, async (_event, payload: any) => {
+  return sessionService.importSession(payload);
 });
 
 ipcMain.handle(IPC_CHANNELS.EXPORT_DIAGNOSTICS, async () => {

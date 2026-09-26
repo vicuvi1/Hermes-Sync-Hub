@@ -517,4 +517,68 @@ export interface ConflictResolution {
   resolution: 'use_local' | 'use_remote' | 'keep_both';
 }
 
+// Milestone 10 Session Access, Export & Import Types
+export interface HermesMessage {
+  id: number | string;
+  sessionId: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string;
+  timestamp?: string | number;
+  tokenCount?: number;
+  toolCallId?: string;
+  toolName?: string;
+  reasoning?: string;
+  toolCalls?: Array<{
+    id: string;
+    type?: string;
+    function: {
+      name: string;
+      arguments: string;
+    };
+  }>;
+}
+
+export interface HermesSessionDetail extends HermesSession {
+  messages: HermesMessage[];
+  systemPrompt?: string;
+  cwd?: string;
+  gitBranch?: string;
+  costUsd?: number;
+  endReason?: string;
+}
+
+export type SessionExportFormat = 'jsonl' | 'markdown' | 'html' | 'json';
+
+export interface SessionExportOptions {
+  sessionId?: string;
+  format?: SessionExportFormat;
+  redactSecrets?: boolean;
+  outputPath?: string;
+}
+
+export interface SessionExportResult {
+  success: boolean;
+  exportedCount: number;
+  format: SessionExportFormat;
+  content?: string;
+  filePath?: string;
+  error?: string;
+}
+
+export interface SessionImportPayload {
+  filePath?: string;
+  content?: string;
+  sessions?: any[];
+}
+
+export interface SessionImportResult {
+  success: boolean;
+  importedCount: number;
+  skippedCount: number;
+  importedIds: string[];
+  skippedIds: string[];
+  errors: string[];
+}
+
+
 

@@ -394,24 +394,45 @@ export class HermesService implements IHermesService {
       let idx = 1;
 
       for (const fileName of files) {
-        if (fileName.startsWith('.') || !fileName.endsWith('.json')) continue;
-        const filePath = path.join(sessionsDir, fileName);
-        try {
-          const stat = fs.statSync(filePath);
-          results.push({
-            id: `sess-${idx++}`,
-            title: fileName.replace('request_dump_', 'Session ').replace('.json', ''),
-            createdAt: new Date(stat.birthtimeMs || stat.mtimeMs).toISOString(),
-            updatedAt: new Date(stat.mtimeMs).toISOString(),
-            messagesCount: 1,
-            model: 'deepseek/deepseek-v4-flash',
-            originDevice: 'local',
-            originDeviceName: 'Local Machine',
-            revision: 1,
-            syncStatus: 'synced',
-            previewText: `Discovered session archive at sessions/${fileName}`,
-          });
-        } catch {}
+        if (!fileName.startsWith('.') && fileName.endsWith('.json')) {
+          const filePath = path.join(sessionsDir, fileName);
+          try {
+            const stat = fs.statSync(filePath);
+            const raw = fs.readFileSync(filePath, 'utf-8');
+            let data: any = {};
+            try { data = JSON.parse(raw); } catch {}
+
+            const sessionId = data.session_id || `sess-${idx++}`;
+            const messages = data.request?.body?.messages || data.messages || [];
+            const model = data.request?.body?.model || data.model || 'openrouter/deepseek/deepseek-v4-flash';
+
+            let firstPrompt = '';
+            for (const m of messages) {
+              if (m.role === 'user' && m.content) {
+                firstPrompt = typeof m.content === 'string' ? m.content.slice(0, 100) : '';
+                break;
+              }
+            }
+
+            const title = firstPrompt
+              ? firstPrompt.replace(/[\r\n]+/g, ' ')
+              : fileName.replace('request_dump_', 'Session ').replace('.json', '');
+
+            results.push({
+              id: sessionId,
+              title,
+              createdAt: data.timestamp || new Date(stat.birthtimeMs || stat.mtimeMs).toISOString(),
+              updatedAt: new Date(stat.mtimeMs).toISOString(),
+              messagesCount: messages.length || 1,
+              model,
+              originDevice: 'local',
+              originDeviceName: 'Local Machine',
+              revision: 1,
+              syncStatus: 'synced',
+              previewText: firstPrompt || `Discovered session archive at sessions/${fileName}`,
+            });
+          } catch {}
+        }
       }
     } catch {}
 

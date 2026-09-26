@@ -21,6 +21,12 @@ import {
   DeviceSyncSummary,
   ConflictItem,
   ConflictResolution,
+  HermesSession,
+  HermesSessionDetail,
+  SessionExportOptions,
+  SessionExportResult,
+  SessionImportPayload,
+  SessionImportResult,
 } from '@hermes-hub/types';
 import { DEFAULT_AGENT_PORT } from '../health/AgentServer.js';
 
@@ -337,6 +343,54 @@ export class AgentClient {
     });
     if (!res.ok) {
       throw new Error(`Failed to resolve conflict: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getSessions(options?: { limit?: number; search?: string }): Promise<HermesSession[]> {
+    const params = new URLSearchParams();
+    if (options?.limit) params.set('limit', String(options.limit));
+    if (options?.search) params.set('search', options.search);
+    const queryString = params.toString() ? `?${params.toString()}` : '';
+
+    const res = await this.fetchWithTimeout(`/sessions${queryString}`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch Hermes sessions: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async getSessionDetail(sessionId: string): Promise<HermesSessionDetail | null> {
+    const res = await this.fetchWithTimeout(`/sessions/${encodeURIComponent(sessionId)}`);
+    if (res.status === 404) {
+      return null;
+    }
+    if (!res.ok) {
+      throw new Error(`Failed to fetch session detail: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async exportSession(options: SessionExportOptions): Promise<SessionExportResult> {
+    const res = await this.fetchWithTimeout('/sessions/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to export session: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async importSession(payload: SessionImportPayload): Promise<SessionImportResult> {
+    const res = await this.fetchWithTimeout('/sessions/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to import session: ${res.status}`);
     }
     return res.json();
   }

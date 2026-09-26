@@ -1,6 +1,6 @@
 const SENSITIVE_PATTERNS = [
-  /sk-or-v1-[a-zA-Z0-9]{30,}/g,
-  /sk-[a-zA-Z0-9]{20,}/g,
+  /sk-or-v1-[a-zA-Z0-9]{20,}/g,
+  /sk-[a-zA-Z0-9_-]{20,}/g,
   /tskey-[a-zA-Z0-9_-]{10,}/g,
   /ghp_[a-zA-Z0-9]{20,}/g,
   /Bearer\s+[a-zA-Z0-9._-]+/gi,

@@ -62,6 +62,11 @@ export const IPC_CHANNELS = {
   GET_SYNC_SUMMARY: 'hermes-hub:get-sync-summary',
   GET_SYNC_CONFLICTS: 'hermes-hub:get-sync-conflicts',
   RESOLVE_SYNC_CONFLICT: 'hermes-hub:resolve-sync-conflict',
+
+  // Milestone 10 Safe Session Access, Export & Import channels
+  GET_SESSION_DETAIL: 'hermes-hub:get-session-detail',
+  EXPORT_SESSION: 'hermes-hub:export-session',
+  IMPORT_SESSION: 'hermes-hub:import-session',
 } as const;
 
 export interface PairingCodePayload {

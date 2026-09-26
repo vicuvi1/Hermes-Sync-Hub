@@ -7,8 +7,8 @@ export function formatBytes(bytes: number, decimals = 1): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 }
 
-export function formatTimeAgo(dateString: string): string {
-  const date = new Date(dateString);
+export function formatTimeAgo(dateInput: string | number | Date): string {
+  const date = typeof dateInput === 'number' && dateInput < 1e11 ? new Date(dateInput * 1000) : new Date(dateInput);
   const now = new Date();
   const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 

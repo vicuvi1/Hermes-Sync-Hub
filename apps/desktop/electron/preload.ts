@@ -35,5 +35,10 @@ contextBridge.exposeInMainWorld('hermesHub', {
   getSyncConflicts: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SYNC_CONFLICTS),
   resolveSyncConflict: (conflictId: string, resolution: any) =>
     ipcRenderer.invoke(IPC_CHANNELS.RESOLVE_SYNC_CONFLICT, conflictId, resolution),
+  // Milestone 10 Sessions
+  getSessions: (options?: any) => ipcRenderer.invoke(IPC_CHANNELS.GET_SESSIONS, options),
+  getSessionDetail: (sessionId: string) => ipcRenderer.invoke(IPC_CHANNELS.GET_SESSION_DETAIL, sessionId),
+  exportSession: (options: any) => ipcRenderer.invoke(IPC_CHANNELS.EXPORT_SESSION, options),
+  importSession: (payload: any) => ipcRenderer.invoke(IPC_CHANNELS.IMPORT_SESSION, payload),
 });
 

@@ -8,6 +8,7 @@ import { SyncthingAdapter, ISyncthingAdapter } from '../sync/SyncthingAdapter.js
 import { PairingService } from '../pairing/PairingService.js';
 import { WorkspaceService } from '../workspace/WorkspaceService.js';
 import { SyncEngineService } from '../sync/SyncService.js';
+import { HermesSessionService } from '../sessions/SessionService.js';
 
 export const DEFAULT_AGENT_PORT = 48199;
 
@@ -23,6 +24,7 @@ export class AgentServer {
   private pairingService: PairingService;
   private workspaceService: WorkspaceService;
   private syncEngine: SyncEngineService;
+  private sessionService: HermesSessionService;
 
   constructor(
     identityService?: DeviceIdentityService,
@@ -33,7 +35,8 @@ export class AgentServer {
     deviceRegistry?: DeviceRegistryService,
     pairingService?: PairingService,
     workspaceService?: WorkspaceService,
-    syncEngine?: SyncEngineService
+    syncEngine?: SyncEngineService,
+    sessionService?: HermesSessionService
   ) {
     this.identityService = identityService || new DeviceIdentityService();
     this.deviceRegistry = deviceRegistry || new DeviceRegistryService(this.identityService);
@@ -61,6 +64,9 @@ export class AgentServer {
         this.deviceRegistry,
         this.syncthingAdapter
       );
+    this.sessionService =
+      sessionService ||
+      new HermesSessionService(this.hermesService, this.workspaceService);
   }
 
   /**
@@ -299,6 +305,64 @@ export class AgentServer {
               try {
                 const parsed = JSON.parse(body || '{}');
                 const result = await this.syncEngine.resolveConflict(parsed.conflictId, parsed.resolution);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+              } catch (err: any) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+              }
+            });
+            return;
+          }
+
+          if (req.method === 'GET' && (url === '/sessions' || url.startsWith('/sessions?'))) {
+            const fullUrl = new URL(req.url || '', 'http://127.0.0.1');
+            const limit = fullUrl.searchParams.get('limit') ? Number(fullUrl.searchParams.get('limit')) : undefined;
+            const search = fullUrl.searchParams.get('search') || undefined;
+            const sessions = await this.sessionService.listSessions({ limit, search });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(sessions));
+            return;
+          }
+
+          if (req.method === 'GET' && url.startsWith('/sessions/')) {
+            const rawSessionId = url.slice('/sessions/'.length);
+            const sessionId = decodeURIComponent(rawSessionId.split('?')[0]);
+            const detail = await this.sessionService.getSessionDetail(sessionId);
+            if (!detail) {
+              res.writeHead(404, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: `Session ${sessionId} not found` }));
+              return;
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(detail));
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/sessions/export') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const result = await this.sessionService.exportSession(parsed);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(result));
+              } catch (err: any) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+              }
+            });
+            return;
+          }
+
+          if (req.method === 'POST' && url === '/sessions/import') {
+            let body = '';
+            req.on('data', (chunk) => (body += chunk));
+            req.on('end', async () => {
+              try {
+                const parsed = JSON.parse(body || '{}');
+                const result = await this.sessionService.importSession(parsed);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(result));
               } catch (err: any) {

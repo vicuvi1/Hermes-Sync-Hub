@@ -33,8 +33,10 @@ projects.db*
 *.db-shm
 *.sqlite
 *.sqlite3
-sessions/
-memories/
+/sessions/
+/memories/
+!apps/**/sessions/**
+!apps/**/memories/**
 HermesHubData/
 HermesHubData/**
 snapshots/
