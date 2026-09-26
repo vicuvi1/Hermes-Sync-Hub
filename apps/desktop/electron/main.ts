@@ -7,6 +7,7 @@ import { IPC_CHANNELS } from '@hermes-hub/protocol';
 import {
   AppLocation,
   CompleteOnboardingInput,
+  CreateHermesBotInput,
   Device,
   HermesCredentialBridgeResult,
   HermesBoosterActionResult,
@@ -26,6 +27,9 @@ import {
   VaultSetupInput,
   VaultUnlockInput,
   SourceRepositoryPushInput,
+  RouterExecutionInput,
+  RouterPolicy,
+  RoutingSimulationInput,
   VaultSecret,
 } from '@hermes-hub/types';
 import { redactSecrets } from '@hermes-hub/shared';
@@ -57,6 +61,7 @@ import { UpdateManager } from './updater.js';
 import { SourceRepositoryService } from './sourceRepository.js';
 import { installRequirements, REQUIREMENT_CATALOG, validateRequirementIds } from './requirementsInstaller.js';
 import { HermesBoosterService } from './hermesBooster.js';
+import { SmartRouterService } from './smartRouter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -118,6 +123,7 @@ let backupScheduleTimer: NodeJS.Timeout | null = null;
 const sourceRepositoryService = new SourceRepositoryService();
 const hermesBoosterService = new HermesBoosterService(hermesService);
 const activityService = new ActivityService(deviceIdentity.getStorageDirectory());
+const smartRouterService = new SmartRouterService(hermesService, path.join(deviceIdentity.getStorageDirectory(), 'smart-router'));
 const searchService = new SearchService(path.join(deviceIdentity.getStorageDirectory(), 'search', 'index.json'));
 const sharedVaultService = new SharedVaultService(
   path.join(workspaceService.getRootPath(), 'vault', 'shared-vault.enc'),
@@ -185,6 +191,7 @@ async function buildSearchDocuments(): Promise<SearchDocument[]> {
 
   const pages: Array<[string, string, AppLocation['tab'], string]> = [
     ['hermes', 'Hermes Control Center', 'hermes', 'Live Hermes runtime, complete inventory, provider credentials, usage, models and current pricing'],
+    ['router', 'Smart Model Router', 'router', 'Free-first task routing, native Hermes bot profiles, model pools, budgets and paid-model allowlists'],
     ['settings', 'Settings', 'settings', 'Application, integrations, privacy, updates and Developer Mode'],
     ['help', 'Help & README', 'help', 'Product handbook, setup and troubleshooting'],
     ['vault', 'Shared Vault', 'vault', 'Password-unlocked encrypted secrets and environment profiles. Secret values are never indexed.'],
@@ -510,6 +517,31 @@ ipcMain.handle(IPC_CHANNELS.TEST_HERMES_MCP, async (_event, name: unknown): Prom
   return hermesBoosterService.testMcp(name);
 });
 ipcMain.handle(IPC_CHANNELS.OPEN_HERMES_APP, async () => hermesBoosterService.openHermesApp());
+ipcMain.handle(IPC_CHANNELS.GET_SMART_ROUTER_STATE, async () => smartRouterService.getState());
+ipcMain.handle(IPC_CHANNELS.SAVE_SMART_ROUTER_POLICY, async (_event, policy: unknown) => {
+  if (!policy || typeof policy !== 'object' || Array.isArray(policy)) throw new Error('A routing policy object is required.');
+  const saved = smartRouterService.savePolicy(policy as RouterPolicy);
+  activityService.record({ type: 'settings_changed', title: 'Smart Router policy updated', description: `${saved.models.length} models, ${saved.pools.length} pools, and ${saved.rules.length} routing rules are active.`, sourceDevice: deviceIdentity.getLocalDevice().deviceName, status: 'success' });
+  return saved;
+});
+ipcMain.handle(IPC_CHANNELS.CREATE_HERMES_BOT, async (_event, input: unknown, confirmed: unknown) => {
+  if (confirmed !== true) throw new Error('Creating a native Hermes bot profile requires explicit confirmation.');
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Hermes bot details are required.');
+  const bot = await smartRouterService.createBot(input as CreateHermesBotInput);
+  activityService.record({ type: 'settings_changed', title: 'Hermes bot created', description: `${bot.name} now uses the native Hermes profile ${bot.profile}.`, sourceDevice: deviceIdentity.getLocalDevice().deviceName, status: 'success' });
+  return bot;
+});
+ipcMain.handle(IPC_CHANNELS.SIMULATE_SMART_ROUTE, async (_event, input: unknown) => {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Routing task details are required.');
+  return smartRouterService.simulate(input as RoutingSimulationInput);
+});
+ipcMain.handle(IPC_CHANNELS.EXECUTE_SMART_ROUTE, async (_event, input: unknown) => {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Routing execution details are required.');
+  const record = await smartRouterService.execute(input as RouterExecutionInput);
+  activityService.record({ type: 'task_routed', title: `Task routed to ${record.profile}`, description: `${record.decision.selectedModel?.label || 'No model'} · complexity ${record.decision.complexity}/100 · ${record.status}.`, sourceDevice: deviceIdentity.getLocalDevice().deviceName, status: record.status === 'success' ? 'success' : 'error', metadata: { routerExecutionId: record.id, paid: record.decision.paid, actualCostUsd: record.actualCostUsd } });
+  return record;
+});
+ipcMain.handle(IPC_CHANNELS.REFRESH_ROUTER_CATALOG, async () => smartRouterService.refreshCatalog());
 
 ipcMain.handle(IPC_CHANNELS.GET_TAILSCALE_STATE, async () => {
   return tailscaleAdapter.getState();

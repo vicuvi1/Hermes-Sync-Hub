@@ -284,6 +284,134 @@ export interface HermesBoosterActionResult {
   backupId?: string;
 }
 
+export type RouterTaskCategory = 'general' | 'coding' | 'research' | 'writing' | 'analysis' | 'vision' | 'tool-use';
+export type RouterModelClass = 'free' | 'paid';
+
+export interface RouterModel {
+  id: string;
+  provider: string;
+  model: string;
+  label: string;
+  class: RouterModelClass;
+  enabled: boolean;
+  approvedForPaidUse: boolean;
+  contextLength: number;
+  promptUsdPerMillion: number;
+  completionUsdPerMillion: number;
+  capabilities: Array<'text' | 'coding' | 'reasoning' | 'vision' | 'tools' | 'long-context'>;
+  catalogCheckedAt?: string;
+}
+
+export interface RouterModelPool {
+  id: string;
+  name: string;
+  description: string;
+  modelIds: string[];
+}
+
+export interface RouterRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  priority: number;
+  minimumComplexity: number;
+  maximumComplexity: number;
+  categories: RouterTaskCategory[];
+  poolId: string;
+}
+
+export interface RouterBudgetPolicy {
+  maxUsdPerTask: number;
+  maxUsdPerDay: number;
+  maxPaidRunsPerDay: number;
+  requireApprovalAboveUsd: number;
+}
+
+export interface RouterPolicy {
+  version: 1;
+  paidEscalationComplexity: number;
+  models: RouterModel[];
+  pools: RouterModelPool[];
+  rules: RouterRule[];
+  budget: RouterBudgetPolicy;
+  updatedAt: string;
+}
+
+export interface HermesBotDefinition {
+  id: string;
+  profile: string;
+  name: string;
+  description: string;
+  defaultPoolId: string;
+  skills: string[];
+  enabled: boolean;
+  nativeProfileDetected: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateHermesBotInput {
+  profile: string;
+  name: string;
+  description: string;
+  defaultPoolId: string;
+  skills?: string[];
+  cloneFrom?: string;
+}
+
+export interface RoutingSimulationInput {
+  prompt: string;
+  botId?: string;
+  category?: RouterTaskCategory;
+  estimatedContextTokens?: number;
+  fileCount?: number;
+  requiresTools?: boolean;
+  requiresVision?: boolean;
+}
+
+export interface RoutingDecision {
+  id: string;
+  createdAt: string;
+  botId: string;
+  category: RouterTaskCategory;
+  complexity: number;
+  reasons: string[];
+  selectedPoolId?: string;
+  selectedModel?: RouterModel;
+  alternativeModelIds: string[];
+  estimatedCostUsd: number;
+  paid: boolean;
+  blocked: boolean;
+  requiresApproval: boolean;
+  message: string;
+}
+
+export interface RouterExecutionInput extends RoutingSimulationInput {
+  confirmed: boolean;
+}
+
+export interface RouterExecutionRecord {
+  id: string;
+  createdAt: string;
+  botId: string;
+  profile: string;
+  promptPreview: string;
+  decision: RoutingDecision;
+  status: 'success' | 'failed' | 'blocked';
+  actualCostUsd: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  output: string;
+}
+
+export interface SmartRouterState {
+  policy: RouterPolicy;
+  bots: HermesBotDefinition[];
+  history: RouterExecutionRecord[];
+  today: { spentUsd: number; paidRuns: number; totalRuns: number };
+  catalog: { state: 'current' | 'stale' | 'offline'; checkedAt?: string; message: string };
+}
+
 export interface HermesSkill {
   id: string;
   name: string;
@@ -386,7 +514,9 @@ export type ActivityEventType =
   | 'repository_sync'
   | 'requirements_installed'
   | 'health_warning'
-  | 'search_reindexed';
+  | 'search_reindexed'
+  | 'settings_changed'
+  | 'task_routed';
 
 export interface ActivityEvent {
   id: string;
@@ -414,7 +544,7 @@ export type SearchEntityKind =
   | 'action';
 
 export interface AppLocation {
-  tab: 'dashboard' | 'hermes' | 'devices' | 'sessions' | 'memory' | 'skills' | 'files' | 'vault' | 'activity' | 'backups' | 'settings' | 'help';
+  tab: 'dashboard' | 'hermes' | 'router' | 'devices' | 'sessions' | 'memory' | 'skills' | 'files' | 'vault' | 'activity' | 'backups' | 'settings' | 'help';
   entityId?: string;
   query?: string;
   section?: string;

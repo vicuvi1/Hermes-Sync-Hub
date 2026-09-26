@@ -6,6 +6,7 @@ import { RuntimeStatusBar } from './components/layout/RuntimeStatusBar';
 import { FirstRunWizard } from './components/onboarding/FirstRunWizard';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { HermesView } from './components/hermes/HermesView';
+import { SmartRouterView } from './components/router/SmartRouterView';
 import { DevicesView } from './components/devices/DevicesView';
 import { SessionsView } from './components/sessions/SessionsView';
 import { MemoryView } from './components/memory/MemoryView';
@@ -65,11 +66,19 @@ import {
   HermesCredentialBridgeResult,
   HermesBoosterActionResult,
   HermesBoosterStatus,
+  HermesBotDefinition,
   SharedVaultStatus,
   VaultEnvironmentProfile,
   VaultSetupInput,
   VaultUnlockInput,
   MigrationBundleResult,
+  CreateHermesBotInput,
+  RouterExecutionInput,
+  RouterExecutionRecord,
+  RouterPolicy,
+  RoutingDecision,
+  RoutingSimulationInput,
+  SmartRouterState,
   VaultSecret,
 } from '@hermes-hub/types';
 import { AgentHealthResponse } from '@hermes-hub/protocol';
@@ -102,6 +111,12 @@ declare global {
       updateHermesPlugin: (name: string, confirmed: boolean) => Promise<HermesBoosterActionResult>;
       testHermesMcp: (name: string) => Promise<HermesBoosterActionResult>;
       openHermesApp: () => Promise<boolean>;
+      getSmartRouterState: () => Promise<SmartRouterState>;
+      saveSmartRouterPolicy: (policy: RouterPolicy) => Promise<RouterPolicy>;
+      createHermesBot: (input: CreateHermesBotInput, confirmed: boolean) => Promise<HermesBotDefinition>;
+      simulateSmartRoute: (input: RoutingSimulationInput) => Promise<RoutingDecision>;
+      executeSmartRoute: (input: RouterExecutionInput) => Promise<RouterExecutionRecord>;
+      refreshRouterCatalog: () => Promise<SmartRouterState>;
       getTailscaleState: () => Promise<TailscaleState>;
       pingTailscalePeer: (ipOrHost: string) => Promise<{ success: boolean; latencyMs?: number; via?: string }>;
       getSyncthingState: () => Promise<SyncthingState>;
@@ -627,6 +642,8 @@ export const App: React.FC = () => {
           )}
 
           {currentTab === 'hermes' && <HermesView sessions={sessions} memories={memories} skills={skills} files={files} vaultStatus={vaultStatus} onRefreshAll={loadHubData} onNavigate={handleNavigate} />}
+
+          {currentTab === 'router' && <SmartRouterView />}
 
           {currentTab === 'skills' && (
             <SkillsView skills={skills} devices={devices} initialSelectedSkillId={location.tab === 'skills' ? location.entityId : undefined} />

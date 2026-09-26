@@ -43,6 +43,7 @@ Hermes Hub turns that operational complexity into a desktop workflow:
 | Capability | What it gives you |
 |---|---|
 | **Hermes Booster** | Live Doctor results, extension inventory, MCP tests, plugin controls, usage/cost visibility, and backup-first Hermes updates. |
+| **Smart Model Router** | Build native Hermes bot profiles, classify work locally, prefer free models, and allow paid escalation only through explicit rules and budgets. |
 | **Universal Command Center** | Press `Ctrl+K` to find sessions, memories, skills, files, devices, backups, activity, settings, and safe actions. |
 | **Memory and workspace tools** | Browse real Hermes content, edit supported Markdown memories safely, inspect revisions, and recover earlier states. |
 | **Multi-PC workflow** | Main-PC onboarding, bidirectional supported-file synchronization, explicit conflicts, device health, and recovery copies. |
@@ -78,6 +79,7 @@ This complete handbook is bundled with every Windows release and opens inside th
 - [Current status](#current-status)
 - [Product principles](#product-principles)
 - [Feature tour](#feature-tour)
+- [Smart Model Router](#smart-model-router)
 - [System requirements](#system-requirements)
 - [Install on Windows](#install-on-windows)
 - [First-run setup](#first-run-setup)
@@ -104,6 +106,7 @@ Hermes Hub provides one place to:
 - Find and open local work instantly with a private universal Command Center.
 - Detect the local Hermes Agent installation and inspect its health.
 - Control the live Hermes connection from a dedicated dashboard with complete user-data inventory, usage, models, prices, and credential bridging.
+- Create native Hermes bot profiles and route confirmed tasks through free-first model pools with a fail-closed paid allowlist.
 - Distinguish healthy, offline, unavailable, misconfigured, and failed services.
 - Register and pair trusted devices.
 - Inspect Hermes sessions, memories, skills, and configuration files.
@@ -164,6 +167,25 @@ The Booster also shows runtime status and location, request/session counts, reco
 The credential bridge never sends secret values through the renderer. With Shared Vault unlocked, an encrypted environment profile can be applied to the local Hermes `.env` file through privileged desktop code. Hermes Hub creates a backup first and keeps the previous environment protected with Windows secure storage. Existing provider keys in the Hermes `.env` file can also be imported directly into encrypted Shared Vault entries. Restart Hermes after changing its environment if the running process does not reload environment variables dynamically.
 
 Generated dependency trees, downloaded runtimes, and caches are summarized instead of rendering thousands of package files. User configuration, sessions, memories, profiles, skills, plugins, logs, state metadata, and top-level runtime files are inventoried. SQLite databases, WAL/SHM files, locks, binaries, and credential files are visible as metadata but are not opened or directly edited.
+
+### Smart Model Router
+
+The **Smart Router** is a policy layer in front of the installed Hermes runtime. It does not create a second agent system. Bots created in the Hub are real isolated Hermes profiles, and confirmed work is executed through the local Hermes CLI with the exact selected profile, provider, model, and optional forced skills.
+
+The default policy is intentionally conservative:
+
+1. A local deterministic classifier scores the task from `0–100` using its category, size, context, affected files, tool use, vision needs, and complexity signals.
+2. The first enabled matching rule chooses a model pool. Ordinary work uses a fast free pool; coding, research, and analysis use a stronger free pool.
+3. Highly complex work may enter the approved-paid pool. DeepSeek V4 Flash is the initial paid entry, but the user can add exact provider/model IDs and change the allowlist.
+4. Paid work runs only when the model is enabled, explicitly approved, above the configured complexity floor, and inside both per-task and daily budgets. A failed check blocks execution instead of choosing another paid model silently.
+5. The simulator shows the category, score, matching pool, exact model, estimated maximum cost, reasons, and approval state before any request is made.
+6. **Run with Hermes** always asks for confirmation. Hermes remains responsible for the actual agent session, memory, tools, plugins, MCP servers, and provider request.
+
+The **Bots** tab discovers existing Hermes profiles and can create a new one by cloning an existing profile, setting its purpose, default pool, and optional skills. The description is also useful to Hermes orchestration features when deciding which profile is appropriate. The **Models & pools** tab stores exact model identifiers, capabilities, context windows, and prices. **Refresh prices** checks OpenRouter's live public catalog and records when the values were last verified. If the catalog is offline, the UI says so and retains the last known configuration.
+
+The **Routing logic** tab supports editable and removable ordered rules by category and complexity range. The **History** tab keeps a local audit trail containing the route, model, profile, result, token information when Hermes reports it, and actual cost when available. Prompt previews and command output are redacted before persistence. Vault plaintext and provider keys are never added to the routing policy or history.
+
+This first version routes tasks started from the Hub. It does not intercept prompts typed directly into another Hermes window, and it does not automatically rerun failed tool-using tasks because repeating a mutating agent task could duplicate side effects. Hermes' native fallback configuration remains the right layer for provider availability and rate-limit recovery; the Hub router handles task complexity, policy, allowlisting, and budgets.
 
 ### Devices
 

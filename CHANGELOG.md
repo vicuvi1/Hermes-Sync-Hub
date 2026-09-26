@@ -2,6 +2,17 @@
 
 All notable changes are documented here. The project uses semantic version tags.
 
+## 0.7.0 — Smart Model Router and native bot builder
+
+- Added a dedicated Smart Router workspace with overview, bot, model, pool, rule, simulator, and history tabs.
+- Added native Hermes profile discovery and confirmed profile creation instead of introducing a competing bot runtime.
+- Added deterministic local task classification with free-first routing for general, coding, research, analysis, writing, vision, and tool-use work.
+- Added exact model/provider configuration, editable pools, ordered routing rules, and a live OpenRouter catalog refresh for current free status, context, and prices.
+- Added fail-closed paid-model approval, a complexity floor, per-task and daily cost limits, and a daily paid-run limit.
+- Added route simulation that explains every score and choice before executing anything.
+- Added confirmed one-shot Hermes execution with exact profile/model selection, redacted local history, and Hermes-reported token/cost capture when available.
+- Added typed renderer/preload/main-process IPC contracts, strict privileged input validation, activity journal events, global-search discovery, and six focused router tests.
+
 ## 0.6.2 — Real product gallery
 
 - Added release-resolution screenshots captured from the real Hermes Hub Electron renderer.

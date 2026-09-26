@@ -13,12 +13,14 @@ import {
   BookOpen,
   Cpu,
   Bot,
+  BrainCircuit,
   X,
 } from 'lucide-react';
 
 export type NavTab =
   | 'dashboard'
   | 'hermes'
+  | 'router'
   | 'devices'
   | 'sessions'
   | 'memory'
@@ -44,6 +46,7 @@ const NAV_GROUPS: { label: string; items: { id: NavTab; label: string; icon: Rea
     items: [
       { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
       { id: 'hermes', label: 'Hermes', icon: Bot },
+      { id: 'router', label: 'Smart Router', icon: BrainCircuit },
       { id: 'sessions', label: 'Sessions', icon: MessageSquare },
       { id: 'memory', label: 'Memory', icon: Brain },
       { id: 'skills', label: 'Skills', icon: Sparkles },

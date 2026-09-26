@@ -65,6 +65,12 @@ export const IPC_CHANNELS = {
   UPDATE_HERMES_PLUGIN: 'hermes-hub:update-hermes-plugin',
   TEST_HERMES_MCP: 'hermes-hub:test-hermes-mcp',
   OPEN_HERMES_APP: 'hermes-hub:open-hermes-app',
+  GET_SMART_ROUTER_STATE: 'hermes-hub:get-smart-router-state',
+  SAVE_SMART_ROUTER_POLICY: 'hermes-hub:save-smart-router-policy',
+  CREATE_HERMES_BOT: 'hermes-hub:create-hermes-bot',
+  SIMULATE_SMART_ROUTE: 'hermes-hub:simulate-smart-route',
+  EXECUTE_SMART_ROUTE: 'hermes-hub:execute-smart-route',
+  REFRESH_ROUTER_CATALOG: 'hermes-hub:refresh-router-catalog',
 
   // Milestone 4 Tailscale Integration channels
   GET_TAILSCALE_STATE: 'hermes-hub:get-tailscale-state',
