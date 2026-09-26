@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Sidebar, NavTab } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
+import { CommandPalette } from './components/layout/CommandPalette';
 import { DashboardView } from './components/dashboard/DashboardView';
 import { DevicesView } from './components/devices/DevicesView';
 import { SessionsView } from './components/sessions/SessionsView';
@@ -101,6 +102,19 @@ export const App: React.FC = () => {
   const [selectedDeviceModal, setSelectedDeviceModal] = useState<Device | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
+  const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setIsCommandPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, []);
 
   // Milestone 2, 4 & 5: Load real local device, agent health, Tailscale & Syncthing state from Desktop IPC
   const fetchTailscaleState = async () => {
@@ -353,6 +367,11 @@ export const App: React.FC = () => {
   };
 
   const handleSaveSecret = (secret: VaultSecret) => {
+    setVaultSecrets((current) => {
+      const existingIndex = current.findIndex((item) => item.id === secret.id);
+      if (existingIndex === -1) return [secret, ...current];
+      return current.map((item) => item.id === secret.id ? secret : item);
+    });
     showNotification(`Secret ${secret.key} encrypted and saved to OS Credential Manager ✓`);
   };
 
@@ -372,6 +391,8 @@ export const App: React.FC = () => {
         currentTab={currentTab}
         onTabChange={(tab) => setCurrentTab(tab)}
         onlineDevicesCount={stats.onlineCount}
+        isOpen={isNavigationOpen}
+        onClose={() => setIsNavigationOpen(false)}
       />
 
       {/* Main Content Area */}
@@ -382,10 +403,12 @@ export const App: React.FC = () => {
           onSyncNow={handleSyncNow}
           isSyncing={isSyncing}
           syncHealth={stats.syncHealth}
+          onOpenNavigation={() => setIsNavigationOpen(true)}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
 
         {/* View Container */}
-        <main className="flex-1 overflow-y-auto px-8 py-6">
+        <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
           {currentTab === 'dashboard' && (
             <DashboardView
               devices={devices}
@@ -458,6 +481,14 @@ export const App: React.FC = () => {
         onClose={() => setSelectedDeviceModal(null)}
         onSync={handleSyncDevice}
         onAction={handleDeviceAction}
+      />
+
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onNavigate={setCurrentTab}
+        onSync={handleSyncNow}
+        onAddDevice={() => setIsAddDeviceOpen(true)}
       />
 
       {/* Floating Notification Toast */}

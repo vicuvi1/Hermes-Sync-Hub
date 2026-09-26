@@ -43,7 +43,7 @@ HermesHubData/
 HermesHubData/**
 /snapshots/
 /backups/
-vault/
+/vault/
 *.bak
 fleet_restart_pending
 processes.json

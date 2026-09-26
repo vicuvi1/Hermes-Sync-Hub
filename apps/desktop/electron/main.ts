@@ -104,6 +104,14 @@ function createWindow() {
     }
   });
 
+  // Never leave users with an invisible process if the renderer is slow to
+  // paint or a background integration is unavailable during startup.
+  setTimeout(() => {
+    if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+  }, 1500);
+
   // Close to tray behavior
   mainWindow.on('close', (event) => {
     const settings = settingsManager.getSettings();
@@ -401,15 +409,14 @@ ipcMain.handle(IPC_CHANNELS.OPEN_FOLDER, async (_event, folderPath: string) => {
   return true;
 });
 
-app.whenReady().then(async () => {
-  try {
-    const port = await agentServer.start();
-    console.log(`[AgentServer] Loopback HTTP server running on 127.0.0.1:${port}`);
-  } catch (err) {
-    console.warn(`[AgentServer] Failed to bind default port, running in-process:`, err);
-  }
-
+app.whenReady().then(() => {
+  // Create the desktop window first. Network or integration startup must never
+  // prevent the control center from becoming visible.
   createWindow();
+
+  agentServer.start()
+    .then((port) => console.log(`[AgentServer] Loopback HTTP server running on 127.0.0.1:${port}`))
+    .catch((err) => console.warn(`[AgentServer] Failed to bind default port, running in-process:`, err));
 
   if (mainWindow) {
     setupTray(mainWindow, settingsManager, {

@@ -11,6 +11,7 @@ import {
   Archive,
   Settings,
   Cpu,
+  X,
 } from 'lucide-react';
 
 export type NavTab =
@@ -29,6 +30,8 @@ interface SidebarProps {
   currentTab: NavTab;
   onTabChange: (tab: NavTab) => void;
   onlineDevicesCount: number;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 const NAV_ITEMS: { id: NavTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -44,15 +47,20 @@ const NAV_ITEMS: { id: NavTab; label: string; icon: React.ComponentType<{ classN
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange, onlineDevicesCount }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange, onlineDevicesCount, isOpen = false, onClose }) => {
   return (
-    <aside className="w-64 border-r border-border bg-card/60 backdrop-blur-md flex flex-col justify-between select-none">
+    <>
+      {isOpen && <button aria-label="Close navigation" className="fixed inset-0 z-40 bg-background/70 backdrop-blur-sm lg:hidden" onClick={onClose} />}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 border-r border-border bg-card/95 backdrop-blur-xl flex flex-col justify-between select-none transition-transform duration-200 lg:static lg:z-auto lg:w-64 lg:translate-x-0 lg:bg-card/60 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       {/* Brand Header */}
       <div>
         <div className="h-16 flex items-center gap-3 px-5 border-b border-border/60">
           <div className="h-9 w-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
             <Cpu className="h-5 w-5" />
           </div>
+          <button aria-label="Close navigation" onClick={onClose} className="ml-auto rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden">
+            <X className="h-4 w-4" />
+          </button>
           <div>
             <div className="text-sm font-bold tracking-tight text-foreground flex items-center gap-2">
               Hermes Hub
@@ -70,7 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange, onlin
             return (
               <button
                 key={item.id}
-                onClick={() => onTabChange(item.id)}
+                onClick={() => { onTabChange(item.id); onClose?.(); }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   isActive
                     ? 'bg-primary text-primary-foreground shadow-sm'
@@ -98,6 +106,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange, onlin
           <span className="font-mono text-emerald-500 font-semibold">{onlineDevicesCount} Online</span>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };

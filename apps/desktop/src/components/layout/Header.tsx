@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Sun, Moon, RefreshCw, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Plus, Sun, Moon, RefreshCw, CheckCircle2, AlertTriangle, Menu, Search } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
 interface HeaderProps {
@@ -8,6 +8,8 @@ interface HeaderProps {
   onSyncNow: () => void;
   isSyncing: boolean;
   syncHealth: 'all_synced' | 'syncing' | 'offline_changes' | 'has_conflicts';
+  onOpenNavigation: () => void;
+  onOpenCommandPalette: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -16,24 +18,32 @@ export const Header: React.FC<HeaderProps> = ({
   onSyncNow,
   isSyncing,
   syncHealth,
+  onOpenNavigation,
+  onOpenCommandPalette,
 }) => {
   const { isDark, setTheme } = useTheme();
 
   return (
-    <header className="h-16 border-b border-border/60 bg-card/40 backdrop-blur-md px-8 flex items-center justify-between sticky top-0 z-20">
+    <header className="h-16 border-b border-border/60 bg-card/70 backdrop-blur-xl px-4 sm:px-6 lg:px-8 flex items-center justify-between sticky top-0 z-20">
       <div className="flex items-center gap-4">
+        <button aria-label="Open navigation" onClick={onOpenNavigation} className="rounded-lg border border-border bg-background p-2 text-muted-foreground hover:text-foreground lg:hidden">
+          <Menu className="h-4 w-4" />
+        </button>
         <h1 className="text-xl font-bold tracking-tight text-foreground capitalize">
           {title}
         </h1>
 
         {/* Global Sync Status Banner */}
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border bg-emerald-500/10 border-emerald-500/20 text-emerald-500">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          <span>Everything synchronized</span>
+        <div className={`hidden sm:flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${syncHealth === 'all_synced' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' : 'bg-amber-500/10 border-amber-500/20 text-amber-500'}`}>
+          {syncHealth === 'all_synced' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+          <span>{syncHealth === 'all_synced' ? 'Everything synchronized' : syncHealth.replace(/_/g, ' ')}</span>
         </div>
       </div>
 
       <div className="flex items-center gap-3">
+        <button onClick={onOpenCommandPalette} className="hidden xl:flex min-w-48 items-center gap-2 rounded-lg border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground hover:border-primary/40 hover:text-foreground">
+          <Search className="h-3.5 w-3.5" /><span>Quick actions</span><kbd className="ml-auto rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px]">Ctrl K</kbd>
+        </button>
         {/* Sync Now Action */}
         <button
           onClick={onSyncNow}
