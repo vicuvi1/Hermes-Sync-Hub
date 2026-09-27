@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
-import type { ConfigureHermesProfileInput, CreateHermesBotInput, HermesBoosterActionResult, HermesBoosterStatus, ModelPriceInfo, RequirementId, RequirementsInstallResult, RouterExecutionInput, RouterPolicy, RoutingSimulationInput, SavedSearch, SearchIndexStatus, SearchQuery, SearchResult, UpdateHermesMemoryInput, VaultEnvironmentProfile, VaultSetupInput, VaultUnlockInput } from '@hermes-hub/types';
+import type { ConfigureHermesProfileInput, ContinuousSyncStatus, CreateHermesBotInput, HermesBoosterActionResult, HermesBoosterStatus, ModelPriceInfo, RequirementId, RequirementsInstallResult, RouterExecutionInput, RouterPolicy, RoutingSimulationInput, SavedSearch, SearchIndexStatus, SearchQuery, SearchResult, UpdateHermesMemoryInput, VaultEnvironmentProfile, VaultSetupInput, VaultUnlockInput } from '@hermes-hub/types';
 
 // Expose safe, typed API to Renderer process
 contextBridge.exposeInMainWorld('hermesHub', {
@@ -59,6 +59,12 @@ contextBridge.exposeInMainWorld('hermesHub', {
   getSnapshots: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SNAPSHOTS),
   createSafeSnapshot: (options?: any) => ipcRenderer.invoke(IPC_CHANNELS.CREATE_SAFE_SNAPSHOT, options),
   triggerSyncCycle: (options?: any) => ipcRenderer.invoke(IPC_CHANNELS.TRIGGER_SYNC_CYCLE, options),
+  getContinuousSyncStatus: (): Promise<ContinuousSyncStatus> => ipcRenderer.invoke(IPC_CHANNELS.GET_CONTINUOUS_SYNC_STATUS),
+  onContinuousSyncStatus: (callback: (status: ContinuousSyncStatus) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: ContinuousSyncStatus) => callback(status);
+    ipcRenderer.on(IPC_CHANNELS.CONTINUOUS_SYNC_STATUS_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.CONTINUOUS_SYNC_STATUS_CHANGED, listener);
+  },
   getSyncSummary: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SYNC_SUMMARY),
   getSyncConflicts: () => ipcRenderer.invoke(IPC_CHANNELS.GET_SYNC_CONFLICTS),
   resolveSyncConflict: (conflictId: string, resolution: any) =>

@@ -5,6 +5,7 @@ import {
   TailscaleState,
   TailscalePeer,
   SyncthingState,
+  ContinuousSyncStatus,
   RequirementId,
   RequirementInstallResult,
 } from '@hermes-hub/types';
@@ -68,6 +69,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [demoMode, setDemoMode] = useState(false);
   const [developerMode, setDeveloperMode] = useState(false);
+  const [continuousSyncEnabled, setContinuousSyncEnabled] = useState(true);
+  const [continuousSyncInterval, setContinuousSyncInterval] = useState(30);
+  const [continuousSyncStatus, setContinuousSyncStatus] = useState<ContinuousSyncStatus | null>(null);
   const [diagnosticsExported, setDiagnosticsExported] = useState(false);
   const [diagnosticsPath, setDiagnosticsPath] = useState<string | null>(null);
   const [pingLatency, setPingLatency] = useState<number | null>(null);
@@ -84,11 +88,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             setNotificationsEnabled(s.notificationsEnabled);
             setDemoMode(s.demoMode);
             setDeveloperMode(s.developerMode);
+            setContinuousSyncEnabled(s.continuousSyncEnabled !== false);
+            setContinuousSyncInterval(s.continuousSyncIntervalSeconds || 30);
           }
         } catch {}
       }
     }
     loadSettings();
+  }, []);
+
+  useEffect(() => {
+    void window.hermesHub?.getContinuousSyncStatus?.().then(setContinuousSyncStatus).catch(() => {});
+    return window.hermesHub?.onContinuousSyncStatus?.(setContinuousSyncStatus);
   }, []);
 
   // Milestone 4: Tailscale state & peer inspection
@@ -165,6 +176,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const handleToggleDeveloperMode = async (val: boolean) => {
     setDeveloperMode(val);
     if (window.hermesHub?.updateAppSettings) await window.hermesHub.updateAppSettings({ developerMode: val });
+  };
+
+  const handleToggleContinuousSync = async (val: boolean) => {
+    setContinuousSyncEnabled(val);
+    await window.hermesHub?.updateAppSettings?.({ continuousSyncEnabled: val });
+  };
+
+  const handleContinuousSyncInterval = async (seconds: number) => {
+    setContinuousSyncInterval(seconds);
+    await window.hermesHub?.updateAppSettings?.({ continuousSyncIntervalSeconds: seconds });
   };
 
   const handlePing = async () => {
@@ -845,6 +866,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground"><RefreshCw className="h-4 w-4 text-primary" />Continuous synchronization</h3>
+        <div className="rounded-2xl border border-primary/20 bg-card/80 p-5 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex items-center gap-2"><div className="text-sm font-bold text-foreground">Keep Hermes PCs synchronized automatically</div><span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${continuousSyncStatus?.state === 'syncing' ? 'bg-blue-500/10 text-blue-400' : continuousSyncStatus?.state === 'error' || continuousSyncStatus?.state === 'retrying' ? 'bg-amber-500/10 text-amber-500' : continuousSyncEnabled ? 'bg-emerald-500/10 text-emerald-500' : 'bg-muted text-muted-foreground'}`}>{continuousSyncStatus?.state || (continuousSyncEnabled ? 'starting' : 'off')}</span></div><p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">Watches supported Hermes and managed-workspace files, groups rapid edits, safely reconciles them, then asks Syncthing to transfer immediately. Periodic retries recover from offline peers without clicking Sync Now.</p></div><button onClick={() => void handleToggleContinuousSync(!continuousSyncEnabled)} className={`flex h-6 w-11 shrink-0 items-center rounded-full p-1 transition-colors ${continuousSyncEnabled ? 'bg-primary' : 'bg-muted'}`} aria-pressed={continuousSyncEnabled}><span className={`h-4 w-4 rounded-full bg-white shadow-md transition-transform ${continuousSyncEnabled ? 'translate-x-5' : 'translate-x-0'}`} /></button></div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-[220px_1fr]"><label className="text-xs font-semibold">Safety reconciliation interval<select value={continuousSyncInterval} disabled={!continuousSyncEnabled} onChange={(event) => void handleContinuousSyncInterval(Number(event.target.value))} className="mt-1.5 h-10 w-full rounded-xl border border-input bg-background px-3 text-sm disabled:opacity-50"><option value={15}>Fast · every 15 seconds</option><option value={30}>Balanced · every 30 seconds</option><option value={60}>Normal · every minute</option><option value={120}>Battery saver · every 2 minutes</option></select></label><div className="rounded-xl bg-muted/40 p-3 text-xs leading-5 text-muted-foreground"><p>{continuousSyncStatus?.message || 'Waiting for the background service.'}</p>{continuousSyncStatus?.lastSuccessAt && <p className="mt-1 font-mono text-[10px]">Last success: {new Date(continuousSyncStatus.lastSuccessAt).toLocaleString()} · {continuousSyncStatus.lastActionsCount} action(s) · {continuousSyncStatus.pendingConflicts} conflict(s)</p>}{continuousSyncStatus?.lastError && <p className="mt-1 text-amber-500">{continuousSyncStatus.lastError}</p>}</div></div>
+          <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/15 bg-amber-500/5 p-3 text-[11px] leading-5 text-muted-foreground"><Shield className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" /><span>Main PC remains the initial baseline authority. After adoption, supported changes are bidirectional and ambiguous simultaneous edits are preserved as conflicts—not silently overwritten.</span></div>
         </div>
       </div>
 

@@ -2,6 +2,17 @@
 
 All notable changes are documented here. The project uses semantic version tags.
 
+## 0.9.0 — Continuous background synchronization
+
+- Added continuous synchronization enabled by default while Hermes Hub runs, including recursive file watching, 1.2-second edit-burst debouncing, a 30-second safety reconciliation, and automatic offline retry.
+- Added serialized sync execution so background, manual, memory-edit, and tray-triggered cycles never race each other.
+- Added a live Settings panel with on/off control, 15/30/60/120-second reconciliation choices, current phase, last success, changed-action count, conflict count, and honest transport errors.
+- Fixed immediate Syncthing rescans to use the required authenticated `POST /rest/db/scan` operation instead of `GET`.
+- Removed the hardcoded Syncthing folder ID and now rescans every configured, unpaused Hermes-related workspace folder without touching unrelated folders.
+- Replaced fictional fixed transfer-speed values with rates calculated from real Syncthing connection byte counters.
+- Preserved Main PC baseline authority, revision hashes, tombstones, recoverable conflicts, and the rule that ambiguous simultaneous edits are never silently overwritten.
+- Expanded the full suite to 170 passing tests, including CRLF stability so an unchanged Windows configuration cannot create an endless sync loop.
+
 ## 0.8.0 — Live OpenRouter and Hermes profile routing
 
 - Added an OpenRouter connection center that detects the key in the active Hermes environment and validates it with OpenRouter's authenticated key endpoint without exposing the secret to the renderer or spending model credits.

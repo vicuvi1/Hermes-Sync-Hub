@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -14,6 +14,32 @@ import {
 } from '../apps/agent/src/index';
 
 describe('Syncthing Adapter & XML Config Parsing', () => {
+  it('requests immediate scans with POST for every configured Hermes workspace folder', async () => {
+    const originalFetch = globalThis.fetch;
+    const calls: Array<{ url: string; method?: string }> = [];
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      calls.push({ url, method: init?.method });
+      if (url.includes('/rest/config/folders')) return new Response(JSON.stringify([
+        { id: 'custom-hub', label: 'Hermes Hub Data', path: 'C:\\Sync\\HermesHubData', type: 'sendreceive', paused: false, devices: [] },
+        { id: 'photos', label: 'Photos', path: 'C:\\Photos', type: 'sendreceive', paused: false, devices: [] },
+      ]), { status: 200 });
+      if (url.includes('/rest/db/status')) return new Response(JSON.stringify({ state: 'idle' }), { status: 200 });
+      if (url.includes('/rest/db/scan')) return new Response('', { status: 200 });
+      return new Response('{}', { status: 200 });
+    }) as typeof fetch;
+    try {
+      const adapter = new SyncthingAdapter('http://127.0.0.1:8384', 'test-key', process.execPath);
+      expect(await adapter.rescanFolder()).toBe(true);
+      const scans = calls.filter((call) => call.url.includes('/rest/db/scan'));
+      expect(scans).toHaveLength(1);
+      expect(scans[0].url).toContain('folder=custom-hub');
+      expect(scans[0].method).toBe('POST');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('should instantiate SyncthingAdapter and report installation status gracefully', async () => {
     const adapter = new SyncthingAdapter();
     const installed = await adapter.isInstalled();

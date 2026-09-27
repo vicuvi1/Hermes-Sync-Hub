@@ -415,7 +415,8 @@ export class SyncEngineService {
 
         let actionType: SyncFileAction['action'] = 'unchanged';
         const sanitizedBuffer = Buffer.from(sanitizedContent, 'utf-8');
-        const sanitizedHash = `sha256-${crypto.createHash('sha256').update(sanitizedBuffer).digest('hex')}`;
+        const normalizedSanitizedBuffer = Buffer.from(sanitizedContent.replace(/\r\n/g, '\n'), 'utf-8');
+        const sanitizedHash = `sha256-${crypto.createHash('sha256').update(normalizedSanitizedBuffer).digest('hex')}`;
 
         if (this.protectedConflictPaths.has(relWorkspace)) {
           actions.push({ relativePath: relWorkspace, category: 'configuration', action: 'conflict', sha256: sanitizedHash, sizeBytes: sanitizedBuffer.length, message: 'Both local and remote changed since the last device baseline.' });

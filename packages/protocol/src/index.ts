@@ -109,6 +109,8 @@ export const IPC_CHANNELS = {
 
   // Milestone 9 Safe Synchronization channels
   TRIGGER_SYNC_CYCLE: 'hermes-hub:trigger-sync-cycle',
+  GET_CONTINUOUS_SYNC_STATUS: 'hermes-hub:get-continuous-sync-status',
+  CONTINUOUS_SYNC_STATUS_CHANGED: 'hermes-hub:continuous-sync-status-changed',
   GET_SYNC_SUMMARY: 'hermes-hub:get-sync-summary',
   GET_SYNC_CONFLICTS: 'hermes-hub:get-sync-conflicts',
   RESOLVE_SYNC_CONFLICT: 'hermes-hub:resolve-sync-conflict',

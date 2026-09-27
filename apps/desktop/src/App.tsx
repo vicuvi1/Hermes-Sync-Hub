@@ -39,6 +39,7 @@ import {
   BackupRecord,
   CompleteOnboardingInput,
   ConfigureHermesProfileInput,
+  ContinuousSyncStatus,
   Device,
   HermesFile,
   HermesMemory,
@@ -147,6 +148,8 @@ declare global {
       getSnapshots: () => Promise<any>;
       createSafeSnapshot: (options?: any) => Promise<any>;
       triggerSyncCycle: (options?: any) => Promise<any>;
+      getContinuousSyncStatus: () => Promise<ContinuousSyncStatus>;
+      onContinuousSyncStatus: (callback: (status: ContinuousSyncStatus) => void) => () => void;
       getSyncSummary: () => Promise<any>;
       getSyncConflicts: () => Promise<any>;
       resolveSyncConflict: (conflictId: string, resolution: any) => Promise<any>;

@@ -1072,6 +1072,9 @@ export interface AppSettings {
   notificationsEnabled: boolean;
   autoBackupEnabled: boolean;
   autoBackupFrequency: 'daily' | 'weekly';
+  continuousSyncEnabled: boolean;
+  continuousSyncIntervalSeconds: number;
+  continuousSyncDebounceMs: number;
   maxBackupsToRetain: number;
   demoMode: boolean;
   onboardingCompleted: boolean;
@@ -1084,6 +1087,21 @@ export interface AppSettings {
   savedSearches: SavedSearch[];
   recentSearches: string[];
   searchIndexVersion: number;
+}
+
+export interface ContinuousSyncStatus {
+  enabled: boolean;
+  state: 'stopped' | 'watching' | 'scheduled' | 'syncing' | 'retrying' | 'error';
+  trigger?: 'startup' | 'file-change' | 'periodic' | 'retry' | 'manual';
+  watchedRoots: string[];
+  lastAttemptAt?: string;
+  lastSuccessAt?: string;
+  nextAttemptAt?: string;
+  lastError?: string;
+  lastActionsCount: number;
+  pendingConflicts: number;
+  transportState: 'ready' | 'unavailable' | 'unknown';
+  message: string;
 }
 
 export interface RecoveryArtifact {

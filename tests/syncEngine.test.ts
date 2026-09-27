@@ -207,6 +207,15 @@ describe('Milestone 9: Safe File-Based Synchronization Engine', () => {
       expect(stagedContent).toContain('[REDACTED]');
       expect(stagedContent).toContain('model: deepseek-v4');
     });
+
+    it('does not repeatedly restage unchanged CRLF configuration on Windows', async () => {
+      const layout = workspaceService.getLayout();
+      fs.writeFileSync(path.join(hermesHome, 'config.yaml'), 'model: test\r\napi_key: sk-or-v1-98a417df8b6e2104bcde190847321fa890123ef\r\n', 'utf-8');
+      const first = await syncEngine.stageConfiguration(hermesHome, layout.configs);
+      const second = await syncEngine.stageConfiguration(hermesHome, layout.configs);
+      expect(first[0].action).toBe('staged_new');
+      expect(second[0].action).toBe('unchanged');
+    });
   });
 
   describe('Bidirectional Ingestion: Workspace to Local Hermes', () => {

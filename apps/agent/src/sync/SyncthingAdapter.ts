@@ -41,6 +41,7 @@ export class SyncthingAdapter implements ISyncthingAdapter {
   private customExePath?: string;
   private cachedExePath: string | null = null;
   private cachedConfigPath: string | null = null;
+  private lastTransferSample?: { at: number; inBytes: number; outBytes: number };
 
   constructor(customApiUrl?: string, customApiKey?: string, customExePath?: string) {
     this.customApiUrl = customApiUrl;
@@ -265,7 +266,7 @@ export class SyncthingAdapter implements ISyncthingAdapter {
   /**
    * Helper to execute authenticated REST calls to local Syncthing instance
    */
-  private async fetchSyncthing(endpoint: string, timeoutMs = 2000): Promise<any> {
+  private async fetchSyncthing(endpoint: string, timeoutMs = 2000, method: 'GET' | 'POST' = 'GET'): Promise<any> {
     const baseUrl = this.getApiBaseUrl();
     const apiKey = this.getApiKey();
     const controller = new AbortController();
@@ -280,12 +281,14 @@ export class SyncthingAdapter implements ISyncthingAdapter {
       const res = await fetch(`${baseUrl}${endpoint}`, {
         headers,
         signal: controller.signal,
+        method,
       });
       clearTimeout(timer);
       if (!res.ok) {
         throw new Error(`Syncthing request ${endpoint} failed with HTTP ${res.status}`);
       }
-      return await res.json();
+      const text = await res.text();
+      return text ? JSON.parse(text) : {};
     } catch (err) {
       clearTimeout(timer);
       throw err;
@@ -421,9 +424,10 @@ export class SyncthingAdapter implements ISyncthingAdapter {
    */
   async getTransferState(): Promise<SyncthingTransferState> {
     try {
-      const [folders, systemCompletion] = await Promise.all([
+      const [folders, systemCompletion, connections] = await Promise.all([
         this.getFolders(),
         this.fetchSyncthing('/rest/system/completion').catch(() => ({ completion: 100 })),
+        this.getConnectionState(),
       ]);
 
       let totalNeedBytes = 0;
@@ -433,10 +437,18 @@ export class SyncthingAdapter implements ISyncthingAdapter {
       for (const f of folders) {
         totalNeedBytes += f.needBytes;
         totalGlobalBytes += f.globalBytes;
-        if (f.state === 'syncing') {
+        if (f.state === 'syncing' || f.state === 'scanning') {
           isSyncing = true;
         }
       }
+
+      const inBytes = Object.values(connections.connections).reduce((sum, connection) => sum + connection.inBytesTotal, 0);
+      const outBytes = Object.values(connections.connections).reduce((sum, connection) => sum + connection.outBytesTotal, 0);
+      const sampledAt = Date.now();
+      const elapsedSeconds = this.lastTransferSample ? Math.max(0.25, (sampledAt - this.lastTransferSample.at) / 1000) : 0;
+      const inRateBytesPerSec = this.lastTransferSample ? Math.max(0, Math.round((inBytes - this.lastTransferSample.inBytes) / elapsedSeconds)) : 0;
+      const outRateBytesPerSec = this.lastTransferSample ? Math.max(0, Math.round((outBytes - this.lastTransferSample.outBytes) / elapsedSeconds)) : 0;
+      this.lastTransferSample = { at: sampledAt, inBytes, outBytes };
 
       const completionPercentage =
         typeof systemCompletion.completion === 'number'
@@ -455,13 +467,13 @@ export class SyncthingAdapter implements ISyncthingAdapter {
           bytesCurrent: Math.max(0, totalGlobalBytes - totalNeedBytes),
           bytesTotal: totalGlobalBytes,
           filesRemaining: folders.reduce((sum, f) => sum + f.needFiles, 0),
-          speedBytesPerSec: 1024 * 1024 * 3.5, // 3.5 MB/s
+          speedBytesPerSec: Math.max(inRateBytesPerSec, outRateBytesPerSec),
         });
       }
 
       return {
-        inRateBytesPerSec: isSyncing ? 3.5 * 1024 * 1024 : 0,
-        outRateBytesPerSec: 0,
+        inRateBytesPerSec,
+        outRateBytesPerSec,
         totalNeedBytes,
         totalGlobalBytes,
         completionPercentage,
@@ -484,10 +496,16 @@ export class SyncthingAdapter implements ISyncthingAdapter {
   /**
    * Triggers an immediate rescan of a Syncthing folder via /rest/db/scan
    */
-  async rescanFolder(folderId = 'hermes-hub-data'): Promise<boolean> {
+  async rescanFolder(folderId?: string): Promise<boolean> {
     try {
-      await this.fetchSyncthing(`/rest/db/scan?folder=${encodeURIComponent(folderId)}`, 3000);
-      return true;
+      const folderIds = folderId
+        ? [folderId]
+        : (await this.getFolders())
+            .filter((folder) => !folder.paused && /hermes|hub/i.test(`${folder.id} ${folder.label} ${folder.path}`))
+            .map((folder) => folder.id);
+      if (!folderIds.length) return false;
+      const results = await Promise.all(folderIds.map((id) => this.fetchSyncthing(`/rest/db/scan?folder=${encodeURIComponent(id)}`, 5000, 'POST').then(() => true).catch(() => false)));
+      return results.every(Boolean);
     } catch {
       return false;
     }

@@ -347,6 +347,22 @@ On every PC:
 
 Do not point Syncthing at the live Hermes database directory. Syncthing transports the managed `HermesHubData` workspace, not active SQLite files.
 
+### Continuous background synchronization
+
+Continuous sync is enabled by default while Hermes Hub is running, including when the window is closed to the system tray. You no longer need to press **Sync Now** for ordinary supported changes:
+
+1. Hermes Hub watches safe Hermes skills, memories, `SOUL.md`, `MEMORY.md`, and sanitized configuration sources, plus their managed-workspace counterparts.
+2. Rapid save bursts are grouped for about 1.2 seconds so an editor writing several temporary changes starts one cycle instead of many.
+3. The safe sync engine stages or applies files using revision hashes and conflict protection.
+4. Hermes Hub immediately requests an authenticated Syncthing rescan for every configured Hermes-related folder.
+5. A periodic safety pass runs every 30 seconds by default and retries automatically when Syncthing or another PC is offline.
+
+Open **Settings → Continuous synchronization** to disable it or choose a 15, 30, 60, or 120-second safety interval. The panel reports the live phase, last successful reconciliation, changed actions, conflicts, and whether Syncthing transport is unavailable. Enable **Start Hermes Hub with Windows** if background synchronization should begin at login.
+
+The Main PC remains authoritative only for publishing a new initial baseline. After a follower adopts that baseline, supported changes are bidirectional. Continuous mode never turns ambiguous edits into silent overwrites: conflicts remain preserved for review and rollback.
+
+Transfer discovery is faster because Hermes Hub now calls Syncthing's scan endpoint with the required `POST` method and discovers actual configured folder IDs rather than assuming a fixed ID. Network throughput itself remains controlled by Syncthing, Tailscale, disk speed, and peer connectivity. Displayed transfer speed comes from real Syncthing byte counters rather than a simulated value.
+
 ### Step 1: choose the Main PC
 
 Decide which current Hermes installation has the memories and skills you trust most. On any computer, open **Devices → Main PC & Initial Copy**, select that device, acknowledge the warning, and choose **Set as Main PC**.

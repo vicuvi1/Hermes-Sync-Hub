@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { IPC_CHANNELS } from '@hermes-hub/protocol';
 import {
   AppLocation,
+  AppSettings,
   CompleteOnboardingInput,
   ConfigureHermesProfileInput,
   CreateHermesBotInput,
@@ -22,6 +23,8 @@ import {
   SearchDocument,
   SearchEntityKind,
   SearchQuery,
+  SyncCycleOptions,
+  SyncCycleResult,
   UpdateHermesMemoryInput,
   UpdateHermesMemoryResult,
   VaultEnvironmentProfile,
@@ -63,6 +66,7 @@ import { SourceRepositoryService } from './sourceRepository.js';
 import { installRequirements, REQUIREMENT_CATALOG, validateRequirementIds } from './requirementsInstaller.js';
 import { HermesBoosterService } from './hermesBooster.js';
 import { SmartRouterService } from './smartRouter.js';
+import { ContinuousSyncService, type ContinuousSyncRoot } from './continuousSync.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -131,6 +135,40 @@ const sharedVaultService = new SharedVaultService(
   deviceIdentity.getLocalDevice().deviceName,
 );
 const rememberedVaultKeyPath = path.join(app.getPath('userData'), 'vault', 'shared-vault-key.bin');
+let syncQueue: Promise<unknown> = Promise.resolve();
+
+function queueSyncCycle(options?: SyncCycleOptions): Promise<SyncCycleResult> {
+  const job = syncQueue.catch(() => undefined).then(() => syncEngine.executeSyncCycle(options));
+  syncQueue = job.then(() => undefined, () => undefined);
+  return job;
+}
+
+async function getContinuousSyncRoots(): Promise<ContinuousSyncRoot[]> {
+  const roots: ContinuousSyncRoot[] = [{
+    path: workspaceService.getRootPath(),
+    accepts: (relative) => /^(skills|memories|configs|vault|devices)\//i.test(relative) || /^manifests\/mesh-sync-policy\.json$/i.test(relative),
+  }];
+  const installation = await hermesService.detect();
+  if (installation?.homePath) roots.unshift({
+    path: installation.homePath,
+    accepts: (relative) => /^(skills|memories)\//i.test(relative) || /^(SOUL|MEMORY)\.md$/i.test(relative) || /^config\.(yaml|json)$/i.test(relative),
+  });
+  return roots;
+}
+
+const continuousSyncService = new ContinuousSyncService(
+  async () => {
+    const result = await queueSyncCycle();
+    const changed = result.actions.filter((action) => action.action !== 'unchanged').length;
+    if (changed || result.conflicts.length) {
+      activityService.record({ type: result.conflicts.length ? 'conflict_detected' : 'file_sync', title: result.conflicts.length ? 'Background sync preserved conflicts' : 'Background synchronization completed', description: `${changed} changed file action(s); ${result.conflicts.length} conflict(s).`, sourceDevice: deviceIdentity.getLocalDevice().deviceName, filesCount: changed, status: result.conflicts.length ? 'warning' : 'success' });
+      void reindexSearch();
+    }
+    return { ...result, transportReady: await syncthingAdapter.isRunning() };
+  },
+  { enabled: configuredSettings.continuousSyncEnabled, intervalSeconds: configuredSettings.continuousSyncIntervalSeconds, debounceMs: configuredSettings.continuousSyncDebounceMs },
+  (status) => mainWindow?.webContents.send(IPC_CHANNELS.CONTINUOUS_SYNC_STATUS_CHANGED, status),
+);
 
 const SEARCH_KINDS = new Set<SearchEntityKind>(['session', 'memory', 'skill', 'file', 'device', 'backup', 'activity', 'setting', 'action']);
 
@@ -700,7 +738,7 @@ ipcMain.handle(IPC_CHANNELS.GET_OVERALL_STATS, async () => {
 
 ipcMain.handle(IPC_CHANNELS.TRIGGER_SYNC_NOW, async () => {
   try {
-    const result = await syncEngine.executeSyncCycle();
+    const result = await queueSyncCycle();
     activityService.record({ type: 'file_sync', title: 'Synchronization completed', description: `Completed ${result.actions.length} file action(s).`, sourceDevice: deviceIdentity.getLocalDevice().deviceName, filesCount: result.actions.length, status: 'success' });
     void reindexSearch();
     return { success: true, message: 'Sync cycle completed successfully', result };
@@ -712,7 +750,7 @@ ipcMain.handle(IPC_CHANNELS.TRIGGER_SYNC_NOW, async () => {
 
 ipcMain.handle(IPC_CHANNELS.TRIGGER_SYNC_CYCLE, async (_event, options: any) => {
   try {
-    const result = await syncEngine.executeSyncCycle(options);
+    const result = await queueSyncCycle(options);
     activityService.record({ type: 'file_sync', title: 'Synchronization completed', description: `Completed ${result.actions.length} file action(s).`, sourceDevice: deviceIdentity.getLocalDevice().deviceName, filesCount: result.actions.length, status: 'success' });
     void reindexSearch();
     return result;
@@ -737,6 +775,7 @@ ipcMain.handle(IPC_CHANNELS.RESOLVE_SYNC_CONFLICT, async (_event, conflictId: st
   activityService.record({ type: 'conflict_detected', title: 'Conflict resolved with recovery copy', description: result.message, sourceDevice: deviceIdentity.getLocalDevice().deviceName, status: result.success ? 'success' : 'error' });
   return result;
 });
+ipcMain.handle(IPC_CHANNELS.GET_CONTINUOUS_SYNC_STATUS, async () => continuousSyncService.getStatus());
 
 ipcMain.handle(IPC_CHANNELS.GET_MESH_SYNC_STATUS, async () => meshCoordinator.getStatus());
 ipcMain.handle(IPC_CHANNELS.SET_PRIMARY_DEVICE, async (_event, deviceId: string) => meshCoordinator.setPrimaryDevice(deviceId));
@@ -774,7 +813,7 @@ ipcMain.handle(IPC_CHANNELS.UPDATE_MEMORY, async (_event, value: unknown): Promi
   let synchronized = false;
   let syncActions = 0;
   try {
-    const syncResult = await syncEngine.executeSyncCycle({ categories: ['memories'] });
+    const syncResult = await queueSyncCycle({ categories: ['memories'] });
     syncActions = syncResult.actions.length;
     synchronized = true;
   } catch {}
@@ -1080,7 +1119,16 @@ ipcMain.handle(IPC_CHANNELS.GET_APP_SETTINGS, async () => {
 });
 
 ipcMain.handle(IPC_CHANNELS.UPDATE_APP_SETTINGS, async (_event, updates: any) => {
-  return settingsManager.updateSettings(updates);
+  if (!updates || typeof updates !== 'object' || Array.isArray(updates)) throw new Error('Settings updates must be an object.');
+  const nextUpdates = { ...updates } as Partial<AppSettings>;
+  if (nextUpdates.continuousSyncIntervalSeconds !== undefined) nextUpdates.continuousSyncIntervalSeconds = Math.min(3600, Math.max(10, Number(nextUpdates.continuousSyncIntervalSeconds) || 30));
+  if (nextUpdates.continuousSyncDebounceMs !== undefined) nextUpdates.continuousSyncDebounceMs = Math.min(10_000, Math.max(250, Number(nextUpdates.continuousSyncDebounceMs) || 1200));
+  if (nextUpdates.continuousSyncEnabled !== undefined) nextUpdates.continuousSyncEnabled = nextUpdates.continuousSyncEnabled === true;
+  const settings = settingsManager.updateSettings(nextUpdates);
+  if ('continuousSyncEnabled' in nextUpdates || 'continuousSyncIntervalSeconds' in nextUpdates || 'continuousSyncDebounceMs' in nextUpdates) {
+    continuousSyncService.update({ enabled: settings.continuousSyncEnabled, intervalSeconds: settings.continuousSyncIntervalSeconds, debounceMs: settings.continuousSyncDebounceMs }, await getContinuousSyncRoots());
+  }
+  return settings;
 });
 
 ipcMain.handle(IPC_CHANNELS.SHOW_NOTIFICATION, async (_event, title: string, body: string) => {
@@ -1211,11 +1259,12 @@ app.whenReady().then(async () => {
 
   setTimeout(() => void runScheduledBackupIfDue().catch((error) => appendCrashLog('scheduled-backup', error)), 10_000);
   backupScheduleTimer = setInterval(() => void runScheduledBackupIfDue().catch((error) => appendCrashLog('scheduled-backup', error)), 60 * 60 * 1_000);
+  continuousSyncService.start(await getContinuousSyncRoots());
 
   if (mainWindow) {
     setupTray(mainWindow, settingsManager, {
       onSyncNow: async () => {
-        const res = await syncEngine.executeSyncCycle();
+        const res = await queueSyncCycle();
         sendDesktopNotification('Sync Completed', `Synchronized ${res.actions.length} file action(s).`);
       },
       onCreateBackup: async () => {
@@ -1257,6 +1306,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', async () => {
   (app as any).isQuitting = true;
   if (backupScheduleTimer) clearInterval(backupScheduleTimer);
+  continuousSyncService.stop();
   destroyTray();
   await agentServer.stop();
 });
