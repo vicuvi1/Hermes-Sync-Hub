@@ -2,6 +2,12 @@
 
 All notable changes are documented here. The project uses semantic version tags.
 
+## 0.9.1 — One-click Windows installer link
+
+- Changed the NSIS artifact to the stable `Hermes-Hub-Setup-x64.exe` filename so one permanent GitHub URL always downloads the latest release.
+- Added a prominent direct `.exe` download section at the top of the GitHub README.
+- Clarified that users need no Git, Node.js, terminal, or source checkout and that the installer creates Desktop and Start Menu shortcuts.
+
 ## 0.9.0 — Continuous background synchronization
 
 - Added continuous synchronization enabled by default while Hermes Hub runs, including recursive file watching, 1.2-second edit-burst debouncing, a 30-second safety reconciliation, and automatic offline retry.

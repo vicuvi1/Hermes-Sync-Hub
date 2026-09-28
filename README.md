@@ -11,7 +11,13 @@ Run Hermes with confidence across one or several PCs. Hermes Hub gives you one v
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 [![Public beta](https://img.shields.io/badge/status-public%20beta-f59e0b)](#current-status)
 
-[Download for Windows](https://github.com/vicuvi1/Hermes-Sync-Hub/releases/latest) · [Read the setup guide](#five-minute-setup) · [Report a bug](https://github.com/vicuvi1/Hermes-Sync-Hub/issues/new?template=bug_report.yml) · [Request a feature](https://github.com/vicuvi1/Hermes-Sync-Hub/issues/new?template=feature_request.yml)
+## Download
+
+### [⬇ Download Hermes Hub for Windows (.exe)](https://github.com/vicuvi1/Hermes-Sync-Hub/releases/latest/download/Hermes-Hub-Setup-x64.exe)
+
+No Git, Node.js, terminal, or source code is required. Run the installer, choose the destination, and Hermes Hub creates Desktop and Start Menu shortcuts automatically.
+
+[View release notes and checksums](https://github.com/vicuvi1/Hermes-Sync-Hub/releases/latest) · [Read the setup guide](#five-minute-setup) · [Report a bug](https://github.com/vicuvi1/Hermes-Sync-Hub/issues/new?template=bug_report.yml) · [Request a feature](https://github.com/vicuvi1/Hermes-Sync-Hub/issues/new?template=feature_request.yml)
 
 > Hermes Hub is an independent companion project. It does not replace Hermes chat, task execution, or agent behavior; it makes the surrounding installation easier to understand, protect, synchronize, and maintain.
 
@@ -53,7 +59,7 @@ Hermes Hub turns that operational complexity into a desktop workflow:
 
 ## Five-minute setup
 
-1. Open the [latest release](https://github.com/vicuvi1/Hermes-Sync-Hub/releases/latest) and download `Hermes-Hub-Setup-<version>-x64.exe`.
+1. [Download the latest Windows installer](https://github.com/vicuvi1/Hermes-Sync-Hub/releases/latest/download/Hermes-Hub-Setup-x64.exe), named `Hermes-Hub-Setup-x64.exe`.
 2. Verify the installer against `SHA256SUMS.txt`, then run it. Current builds are unsigned, so Windows SmartScreen may require **More info → Run anyway**.
 3. Start Hermes Hub from the Desktop or Start Menu and let onboarding detect Hermes and the managed workspace.
 4. Open **Hermes** to review live health, extensions, usage, credentials, and updates.
@@ -264,7 +270,7 @@ The installed app does not require Git, Node.js, pnpm, or a source checkout.
 ## Install on Windows
 
 1. Open the [latest GitHub Release](https://github.com/vicuvi1/Hermes-Sync-Hub/releases/latest).
-2. Download `Hermes-Hub-Setup-<version>-x64.exe`.
+2. Download `Hermes-Hub-Setup-x64.exe`, or use the permanent [direct installer link](https://github.com/vicuvi1/Hermes-Sync-Hub/releases/latest/download/Hermes-Hub-Setup-x64.exe).
 3. Confirm it came from `vicuvi1/Hermes-Sync-Hub`.
 4. Run the installer and choose the installation directory if desired.
 5. Launch **Hermes Hub** from the Desktop or Start Menu shortcut.
